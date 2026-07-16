@@ -559,41 +559,39 @@ update_positions:
     .if_grounded:
         lod u8t, cr, PLAYER.grounded
         jfs @end+
-        lod f32t, t0, PLAYER.x
-        lod f32t, t1, PLAYER.y
-        lod u8t, t2, PLAYER.parent_body_index
-        cea bodies, t2, BODY.SIZE
-        lde f32t, t3, BODY.X
-        lde f32t, t4, BODY.Y
-        lde f32t, t5, BODY.R
-        lod f32t, t6, PLAYER.collision_radius
-        fadd t5, t6
-        lod f32t, t6, distance_scale
-        fdiv t5, t6
+        #lod u8t, t2, PLAYER.parent_body_index
+        #cea bodies, t2, BODY.SIZE
+        #lde f32t, t3, BODY.X
+        #lde f32t, t4, BODY.Y
+        #lde f32t, t5, BODY.R
+        #lod f32t, t6, PLAYER.collision_radius
+        #fadd t5, t6
+        #lod f32t, t6, distance_scale
+        #fdiv t5, t6
 
 
-        fsub t6, t0, t3 # dx
-        fsub t7, t1, t4 # dy
-        fpow t8, t6, 2.0
-        fpow t9, t7, 2.0
-        fadd t8, t9 # r^2
-        fsqrt t8 # r
-        fdiv t6, t8 # dx/r
-        fdiv t7, t8 # dy/r
-        ffma t0, t5, t3
-        ffma t1, t5, t4
+        #fsub t6, t0, t3 # dx
+        #fsub t7, t1, t4 # dy
+        #fpow t8, t6, 2.0
+        #fpow t9, t7, 2.0
+        #fadd t8, t9 # r^2
+        #fsqrt t8 # r
+        #fdiv t6, t8 # dx/r
+        #fdiv t7, t8 # dy/r
+        #ffma t0, t5, t3
+        #ffma t1, t5, t4
 
-        @if_timescale_lt_1:
-            cmp flt, TIME_SCALE, 1.0
-            jfs @endif+
-            fmul t0, TIME_SCALE
-            fmul t1, TIME_SCALE
-        @endif:
+        #@if_timescale_lt_1:
+            #cmp flt, TIME_SCALE, 1.0
+            #jfs @endif+
+            #fmul t0, TIME_SCALE
+            #fmul t1, TIME_SCALE
+        #@endif:
 
         #fadd t0, t2
         #fadd t1, t3
-        str f32t, PLAYER.x, t0
-        str f32t, PLAYER.y, t1
+        #str f32t, PLAYER.x, t0
+        #str f32t, PLAYER.y, t1
 
 
 
@@ -619,7 +617,7 @@ update_positions:
         mvc t11, 2.0*PI
         fadd t10, t11
         str f32t, PLAYER.rot, t10
-        jmp @end+
+        jmp @else+
     @else:
         lod f32t, t0, PLAYER.x
         lod f32t, t1, PLAYER.y
@@ -736,7 +734,7 @@ update_collisions:
         @endloop2:
 
         # Player collision
-        .if_player_colldiing:
+        .if_player_colliding:
             lod u8t, cr, skip_player_collision_check
             jtr @endif+
             mov a0, s0
@@ -758,13 +756,15 @@ update_collisions:
             fsqrt t9 # r
             fdiv t7, t9 # Normal vector
             fdiv t8, t9
-
+            
+            lod f32t, t11, PLAYER.collision_radius
+            fadd t4, t11
             lod f32t, t11, distance_scale
             fdiv t10, t4, t11
             ffma t11, t7, t10, t0 # Move player to radius
             ffma t12, t8, t10, t1
-            str f32t, PLAYER.velx, t11
-            str f32t, PLAYER.vely, t12
+            str f32t, PLAYER.x, t11
+            str f32t, PLAYER.y, t12
 
             str u8t, PLAYER.parent_body_index, s0
 
