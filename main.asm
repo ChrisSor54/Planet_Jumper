@@ -63,7 +63,7 @@ def TIME_SCALE 1.0 # How fast the simulation runs. Must be greater than 0 or thi
 sbmk "Visualization Settings"
 
 def ZOOM_STEP 2.0 # How much to change zoom when zoom commands are input
-def MAX_ZOOM 71.0 # Keep this at an odd number to avoid issues with sprite selection
+def MAX_ZOOM 73.0 # Keep this at an odd number to avoid issues with sprite selection
 def MIN_ZOOM 1.0
 def CAMERA_SPEED 0.5
 def FREECAM_SPEED 100.0
@@ -276,7 +276,7 @@ _start: # Runs once when the VM starts.
     mov a3, 830.45 # VELOCITY Y
     mov a4, PI/10 # ROTATIONAL ANGULAR VELOCITY
     mov a5, 100.0 # RADIUS
-    mov a6, 7000.0 # MASS
+    mov a6, 70000.0 # MASS
     mov a7, 200 # LUMINOSITY
     cal add_body
 
@@ -1981,53 +1981,7 @@ sbmk "Draw HUD"
 draw_hud:
     def HUD_PADDING 2
 
-    # Jump Text
     mov a0, HUD_TEXTURE
-    mov a1, SCREEN_WIDTH - 108 - HUD_PADDING
-    mov a2, SCREEN_HEIGHT - 16 - HUD_PADDING
-    vmov a3..a4, 0
-    mov a5, 88
-    mov a6, 16
-    mov a7, 0
-    syscall SYS_DRAW_TEXTURE_REGION
-
-
-    # B button
-    mov a1, HUD_PADDING
-    mov a2, SCREEN_HEIGHT - 16 - HUD_PADDING
-    mov a4, 16
-    mov a5, 24
-    syscall SYS_DRAW_TEXTURE_REGION
-
-
-    # B button action text
-    mov a1, 24 + HUD_PADDING
-    mov a2, SCREEN_HEIGHT - 16 - HUD_PADDING
-    @if_freecam_enabled:
-        lod u8t, cr, freecam_enabled
-        jfs @else+
-        mov a4, 96
-        lod u8t, cr, freecam_relative_velocity_enabled
-        mvc a4, 112
-        mov a5, 96
-        jmp @endif+
-    @else:
-    @if_grounded:
-        lod u8t, cr, PLAYER.is_grounded
-        jfs @else+
-        mov a3, 24
-        mov a5, 64
-        lod u8t, cr, PLAYER.is_charging
-        mvc a3, 0
-        mvc a4, 144
-        mvc a5, 96
-        jmp @endif+
-    @else:
-        mov a3, 0
-        mov a4, 128
-        mov a5, 80
-    @endif:
-    syscall SYS_DRAW_TEXTURE_REGION
 
     # Zoom Text
     mov a1, HUD_PADDING
@@ -2036,31 +1990,38 @@ draw_hud:
     mov a4, 32
     mov a5, 104
     mov a6, 32
+    mov a7, 0
+    syscall SYS_DRAW_TEXTURE_REGION
+
+    # B button
+    mov a1, HUD_PADDING
+    mov a2, SCREEN_HEIGHT - 16 - HUD_PADDING
+    mov a4, 16
+    mov a5, 24
+    mov a6, 16
     syscall SYS_DRAW_TEXTURE_REGION
 
 
-    @if_paused:
-        lod u8t, cr, system_paused
-        jfs @endif+
-        mov a1, SCREEN_WIDTH/2 - 48
-        mov a2, SCREEN_HEIGHT/2
-        mov a4, 64
-        mov a5, 96
-        mov a6, 16
-        syscall SYS_DRAW_TEXTURE_REGION
-    @endif:
-
+    # B button action text
     @if_freecam_enabled:
-        # Freecam Text
         lod u8t, cr, freecam_enabled
-        jfs @endif+
-        mov a1, SCREEN_WIDTH - 112 - HUD_PADDING
-        mov a2, HUD_PADDING
-        mov a4, 80
-        mov a5, 112
-        mov a6, 16
+        jfs @else+
+        mov a1, 24 + HUD_PADDING
+        mov a2, SCREEN_HEIGHT - 16 - HUD_PADDING
+        mov a4, 96
+        lod u8t, cr, freecam_relative_velocity_enabled
+        mvc a4, 112
+        mov a5, 96
         syscall SYS_DRAW_TEXTURE_REGION
-    @endif:
+        jmp @endif+
+    @else:
+
+    # Jump Text
+    mov a1, SCREEN_WIDTH - 108 - HUD_PADDING
+    mov a2, SCREEN_HEIGHT - 16 - HUD_PADDING
+    vmov a3..a4, 0
+    mov a5, 88
+    syscall SYS_DRAW_TEXTURE_REGION
 
     def CHARGE_BAR_X SCREEN_WIDTH - 16 - HUD_PADDING
     def CHARGE_BAR_Y SCREEN_HEIGHT - (8*CHARGE_BAR_LENGTH) - HUD_PADDING
@@ -2086,13 +2047,13 @@ draw_hud:
 
     .if_charging:
         cmp gt, t0, 0
-        jfs @endif+
+        jfs @endif2+
         #sub t0, 6
         sub a1, CHARGE_BAR_Y + 8*(CHARGE_BAR_LENGTH-1) + 2, t0
         mov a3, t0
         mov a4, 255
         syscall SYS_DRAW_RECT
-    @endif:
+    @endif2:
 
     # Jump Bar top
     mov a0, HUD_TEXTURE
@@ -2121,6 +2082,100 @@ draw_hud:
     mov a5, 16
     mov a6, 8
     syscall SYS_DRAW_TEXTURE_REGION
+
+    mov a1, 24 + HUD_PADDING
+    mov a2, SCREEN_HEIGHT - 16 - HUD_PADDING
+    @if_grounded:
+        lod u8t, cr, PLAYER.is_grounded
+        jfs @else+
+        mov a3, 24
+        mov a4, 16
+        mov a5, 64
+        mov a6, 16
+        lod u8t, cr, PLAYER.is_charging
+        mvc a3, 0
+        mvc a4, 144
+        mvc a5, 96
+        syscall SYS_DRAW_TEXTURE_REGION
+        jmp @endif+
+    @else:
+        mov a3, 0
+        mov a4, 128
+        mov a5, 80
+        mov a6, 16
+        syscall SYS_DRAW_TEXTURE_REGION
+    @endif:
+
+
+    @if_paused:
+        lod u8t, cr, system_paused
+        jfs @endif+
+        mov a1, SCREEN_WIDTH/2 - 48
+        mov a2, SCREEN_HEIGHT/2
+        mov a3, 0
+        mov a4, 64
+        mov a5, 96
+        mov a6, 16
+        syscall SYS_DRAW_TEXTURE_REGION
+    @endif:
+
+    @if_freecam_enabled:
+        # Freecam Text
+        lod u8t, cr, freecam_enabled
+        jfs @endif+
+        mov a1, SCREEN_WIDTH - 112 - HUD_PADDING
+        mov a2, HUD_PADDING
+        mov a3, 0
+        mov a4, 80
+        mov a5, 112
+        mov a6, 16
+        syscall SYS_DRAW_TEXTURE_REGION
+    @endif:
+
+    # Zoom bar
+
+    def ZOOM_BAR_LENGTH 13
+
+
+    mov a1, HUD_PADDING
+    mov a2, 32 + HUD_PADDING
+    mov a3, 104
+    mov a4, 0
+    mov a5, 8
+    mov a6, 16
+    syscall SYS_DRAW_TEXTURE_REGION
+
+    mov t0, 1
+    mov a3, 112
+    @loop:
+        mul t1, t0, 8
+        add a1, t1, HUD_PADDING
+        syscall SYS_DRAW_TEXTURE_REGION
+        inc t0
+        cmp gt, t0, ZOOM_BAR_LENGTH-2
+        jfs @loop-
+    @endloop:
+
+    mov a1, 8*(ZOOM_BAR_LENGTH-1) + HUD_PADDING
+    mov a3, 104
+    mov a7, 0b10
+    syscall SYS_DRAW_TEXTURE_REGION
+
+    lod f32t, t0, distance_scale
+    fdiv t0, MAX_ZOOM
+    fctf t1, 8*(ZOOM_BAR_LENGTH-2)+2
+    fmul t1, t0
+    frou t1
+    fcti t1
+
+    add a1, t1, HUD_PADDING
+    add a1, 2
+    mov a3, 120
+    mov a7, 0
+    syscall SYS_DRAW_TEXTURE_REGION
+
+
+
     ret
 
 #-------------------------------------------------------------------------------
