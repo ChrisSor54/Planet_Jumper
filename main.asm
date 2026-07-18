@@ -276,7 +276,7 @@ _start: # Runs once when the VM starts.
     mov a3, 830.45 # VELOCITY Y
     mov a4, PI/10 # ROTATIONAL ANGULAR VELOCITY
     mov a5, 100.0 # RADIUS
-    mov a6, 70000.0 # MASS
+    mov a6, 6500000.0 # MASS --- This one is tricky to take off from, but it's possible!
     mov a7, 200 # LUMINOSITY
     cal add_body
 
