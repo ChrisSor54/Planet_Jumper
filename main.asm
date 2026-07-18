@@ -109,7 +109,7 @@ PLAYER:
     def .SMOKE_SPAWN_COOLDOWN 0.01 # How often smoke is produced while flying
     # Properties
     ## Physics
-    .x: emb f32t 0.0 # X Position
+    .x: emb f32t -21000.0 + 10500.0 # X Position
     .y: emb f32t 0.0 # Y Position
     .velx: emb f32t 0.0 # X Velocity (km/s)
     .vely: emb f32t -0.001 # Y Velocity (km/s) This is just to make the player face up at start
@@ -239,29 +239,39 @@ _start: # Runs once when the VM starts.
     mov a2, 0.0 # VELOCITY X
     mov a3, 0.0 # VELOCITY Y
     mov a4, 0.000003 # ROTATIONAL ANGULAR VELOCITY
-    mov a5, 10000.0 # RADIUS
-    mov a6, 10000000000.0 # MASS
+    mov a5, 5000.0 # RADIUS
+    mov a6, 20000000000.0 # MASS
     mov a7, 50000 # LUMINOSITY
     cal add_body
 
     mov a0, 0.0 # X
     mov a1, 0.0 # Y
     mov a2, 0.0 # VELOCITY X
-    mov a3, 690.07 # VELOCITY Y
-    mov a4, 2*PI/10 # ROTATIONAL ANGLUAR VELOCITY
+    mov a3, 975.9 # VELOCITY Y
+    mov a4, 2*PI/60 # ROTATIONAL ANGLUAR VELOCITY
     mov a5, 50.0 # RADIUS
     mov a6, 300000.0 # MASS
-    mov a7, 150 # LUMA
+    mov a7, 150 # LUMINOSITY
     cal add_body
 
     mov a0, 150.0 # X
     mov a1, 0.0 # Y
-    mov a2, -10.0 # VELOCITY X
-    mov a3, 690.07 + 44.72 # VELOCITY Y
+    mov a2, 0.0 # VELOCITY X
+    mov a3, 975.9 + 44.72 # VELOCITY Y
     mov a4, 2*PI/5 # ROTATIONAL ANGULAR VELOCITY
     mov a5, 20.0 # RADIUS
-    mov a6, 5000.0 # MASS
-    mov a7, 150 # LUMA
+    mov a6, 50000.0 # MASS
+    mov a7, 150 # LUMINOSITY
+    cal add_body
+
+    mov a0, -21000.0 + 10500.0 # X
+    mov a1, 0.0 # Y
+    mov a2, 0.0 # VELOCITY X
+    mov a3, 1380.13 # VELOCITY Y
+    mov a4, 2*PI # ROTATIONAL ANGULAR VELOCITY
+    mov a5, 10.0 # RADIUS
+    mov a6, 7000.0 # MASS
+    mov a7, 200 # LUMINOSITY
     cal add_body
 
     mov a0, false
@@ -287,9 +297,9 @@ _update: # Runs at 60 Hz.
     mov s0, zr
     cal update_gravity
     cal check_input
-    cal update_collisions
     cal update_velocities
     cal update_positions
+    cal update_collisions
     cal update_smoke
     @iterate_update: # Iterate for larger timescales
         fadd s0, 1.0
@@ -355,6 +365,10 @@ _input: # Runs when input state changes.
         jfs @end+
         fmul s0, ZOOM_STEP
         lod f32t, a0, distance_scale
+        mov t2, 1.0
+        cmp fgt, a0, 7.0
+        mvc t2, 2.0
+        fmul s0, t2
         mov t1, a0
         fadd a0, s0
         fclp a0, MIN_ZOOM, MAX_ZOOM
@@ -407,7 +421,7 @@ add_body:
     # > (f32t) a4: rotation speed
     # > (f32t) a5: radius
     # > (f32t) a6: mass
-    # > (u8t) a7: luma
+    # > (u8t)  a7: luma
 
     # Step by step instructions to add a new planet or moon with a stable circular orbit:
     #   1. Define P (Parent position), Vp (Parent velocity), M (Parent mass),
@@ -468,6 +482,8 @@ add_body:
 sbmk "Spawn Smoke"
 spawn_smoke:
     # > a0: smoke index
+    # > a1..a2: min/max angle offset
+    # > a3..a4: min/max velocity scale
 
     lod f32t, t0, PLAYER.x
     lod f32t, t1, PLAYER.y
@@ -477,11 +493,11 @@ spawn_smoke:
     lod f32t, t5, PLAYER.collision_radius
 
     fadd t4, PI
-    frnd t7, SMOKE.MIN_ANGLE_OFFSET, SMOKE.MAX_ANGLE_OFFSET
+    frnd t7, a1, a2
     fadd t6, t4, t7
     fcos t7, t6
     fsin t8, t6
-    frnd t9, SMOKE.MIN_VEL_SCALE, SMOKE.MAX_VEL_SCALE
+    frnd t9, a3, a4
     fmul t9, PLAYER.THRUSTER_STRENGTH
     fmul t7, t9
     fmul t8, t9
@@ -1056,6 +1072,10 @@ update_smoke:
             mov cr, s1
             jfs @endif+
             mov a0, s0
+            mov a1, SMOKE.MIN_ANGLE_OFFSET
+            mov a2, SMOKE.MAX_ANGLE_OFFSET
+            mov a3, SMOKE.MIN_VEL_SCALE
+            mov a4, SMOKE.MAX_VEL_SCALE
             cal spawn_smoke
             mov s1, false
             str f32t, PLAYER.smoke_cooldown_timer, PLAYER.SMOKE_SPAWN_COOLDOWN # Reset cooldown
@@ -1203,15 +1223,17 @@ player_move:
         fmul t8, s0, PLAYER.MOVE_SPEED
         fmul t0, t8
         fmul t1, t8
+
+        # Player is moved towards the planet as well to help avoid flinging yourself off
         fabs t8
-        #fdiv t8, 2.0
         lde f32t, t8, BODY.R
         lod f32t, t9, distance_scale
         fdiv t8, t9
+        fdiv t8, 2.0
         fmul t6, t8
         fmul t7, t8
-        fadd t0, t0, t6
-        fadd t1, t1, t7
+        fadd t0, t6
+        fadd t1, t7
 
         str f32t, PLAYER.movex, t0
         str f32t, PLAYER.movey, t1
@@ -1301,6 +1323,24 @@ player_jump:
     lod i8t, a2, PLAYER.parent_body_index
     cal apply_impulse
 
+    psh s0
+    mov s0, zr
+    str u8t, smoke_can_spawn, true
+    @loop:
+        mov a0, s0
+        mov a1, PI - PI/6
+        mov a2, PI + PI/6
+        #mov a3, SMOKE.MIN_VEL_SCALE
+        mov a3, 0.5
+        mov a4, 0.9
+        #mov a4, SMOKE.MIN_VEL_SCALE
+        cal spawn_smoke
+        inc s0
+        cmp lt, s0, 15
+        jtr @loop-
+    @endloop:
+    pop s0
+    str u8t, smoke_can_spawn, false
     str f32t, PLAYER.jump_charge, PLAYER.MIN_JUMP_CHARGE
     @end:
     ret
@@ -1719,8 +1759,8 @@ draw_bodies:
                 fsin t2, s4
                 ffma a2, t1, s3, s1
                 ffma a3, t2, s3, s2
-                fdiv t3, s3, 2.0
-                fmin t3, t3, 10.0
+                fmul t3, s3, 0.9
+                #fsub t3, s3,
                 ffma a0, t1, t3, s1
                 ffma a1, t2, t3, s2
                 cal draw_line
@@ -1849,11 +1889,12 @@ draw_hud:
     syscall SYS_DRAW_TEXTURE_REGION
 
     mov a1, HUD_PADDING
-    mov a2, SCREEN_HEIGHT - 48 - HUD_PADDING
+    mov a2, SCREEN_HEIGHT - 16 - HUD_PADDING
     mov a4, 16
     syscall SYS_DRAW_TEXTURE_REGION
 
-    mov a2, SCREEN_HEIGHT - 32 - HUD_PADDING
+    mov a1, HUD_PADDING
+    mov a2, HUD_PADDING
     mov a4, 32
     mov a5, 104
     mov a6, 32
