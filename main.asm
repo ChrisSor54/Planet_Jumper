@@ -234,12 +234,12 @@ sbmk "Start"
 _start: # Runs once when the VM starts.
     # Initialize your game state here.
 
-    mov a0, -21000.0 # X
+    mov a0, -34000.0 # X
     mov a1, 0.0 # Y
     mov a2, 0.0 # VELOCITY X
     mov a3, 0.0 # VELOCITY Y
     mov a4, 0.000003 # ROTATIONAL ANGULAR VELOCITY
-    mov a5, 15000.0 # RADIUS
+    mov a5, 24000.0 # RADIUS
     mov a6, 20000000000.0 # MASS
     mov a7, 50000 # LUMINOSITY
     cal add_body
@@ -247,17 +247,17 @@ _start: # Runs once when the VM starts.
     mov a0, 0.0 # X
     mov a1, 0.0 # Y
     mov a2, 0.0 # VELOCITY X
-    mov a3, 975.9 # VELOCITY Y
-    mov a4, 2*PI/60 # ROTATIONAL ANGLUAR VELOCITY
-    mov a5, 500.0 # RADIUS
-    mov a6, 600000.0 # MASS
-    mov a7, 150 # LUMINOSITY
+    mov a3, 766.96 # VELOCITY Y
+    mov a4, 2*PI/600 # ROTATIONAL ANGLUAR VELOCITY
+    mov a5, 250.0 # RADIUS
+    mov a6, 800000.0 # MASS
+    mov a7, 200 # LUMINOSITY
     cal add_body
 
     mov a0, -350.0 # X
     mov a1, 0.0 # Y
     mov a2, 0.0 # VELOCITY X
-    mov a3, 975.9 - 41.4 # VELOCITY Y
+    mov a3, 766.96 - 47.81 # VELOCITY Y
     mov a4, 2*PI/5 # ROTATIONAL ANGULAR VELOCITY
     mov a5, 10.0 # RADIUS
     mov a6, 50000.0 # MASS
@@ -1323,7 +1323,10 @@ player_jump:
     lod i8t, a2, PLAYER.parent_body_index
     cal apply_impulse
 
-    psh s0
+    vpsh s0..s1
+    mov s1, t9
+    fsub s1, PLAYER.MIN_JUMP_CHARGE
+    fdiv s1, PLAYER.MAX_JUMP_CHARGE
     mov s0, zr
     str u8t, smoke_can_spawn, true
     @loop:
@@ -1331,15 +1334,17 @@ player_jump:
         mov a1, PI - PI/6
         mov a2, PI + PI/6
         #mov a3, SMOKE.MIN_VEL_SCALE
-        mov a3, 0.5
-        mov a4, 0.9
+        fmul t0, s1, 0.8
+        fmul t1, s1, 1.0
+        mov a3, t0
+        mov a4, t1
         #mov a4, SMOKE.MIN_VEL_SCALE
         cal spawn_smoke
         inc s0
         cmp lt, s0, 15
         jtr @loop-
     @endloop:
-    pop s0
+    vpop s0..s1
     str u8t, smoke_can_spawn, false
     str f32t, PLAYER.jump_charge, PLAYER.MIN_JUMP_CHARGE
     @end:
