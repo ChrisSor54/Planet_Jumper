@@ -265,51 +265,56 @@ sbmk "Start"
 _start: # Runs once when the VM starts.
     # Initialize your game state here.
 
-    #mov a0, -34000.0 # X
-    #mov a1, 0.0 # Y
-    #mov a2, 0.0 # VELOCITY X
-    #mov a3, 0.0 # VELOCITY Y
-    #mov a4, 0.000003 # ROTATIONAL ANGULAR VELOCITY
-    #mov a5, 5000.0 # RADIUS
-    #mov a6, 20000000000.0 # MASS
-    #mov a7, 50000 # LUMINOSITY
-    #cal add_body
+    mov a0, -34000.0 # X
+    mov a1, 0.0 # Y
+    mov a2, 0.0 # VELOCITY X
+    mov a3, 0.0 # VELOCITY Y
+    mov a4, 0.000003 # ROTATIONAL ANGULAR VELOCITY
+    mov a5, 20000.0 # RADIUS
+    mov a6, 20000000000.0 # MASS
+    mov a7, 50000 # LUMINOSITY
+    cal add_body
 
-    #mov a0, 0.0 # X
-    #mov a1, 0.0 # Y
-    #mov a2, 0.0 # VELOCITY X
-    #mov a3, 766.96 # VELOCITY Y
-    #mov a4, 2*PI/600 # ROTATIONAL ANGLUAR VELOCITY
-    #mov a5, 250.0 # RADIUS
-    #mov a6, 8000000.0 # MASS
-    #mov a7, 200 # LUMINOSITY
-    #cal add_body
+    mov a0, 0.0 # X
+    mov a1, 0.0 # Y
+    mov a2, 0.0 # VELOCITY X
+    mov a3, 766.96 # VELOCITY Y
+    mov a4, 2*PI/600 # ROTATIONAL ANGLUAR VELOCITY
+    mov a5, 250.0 # RADIUS
+    mov a6, 8000000.0 # MASS
+    mov a7, 200 # LUMINOSITY
+    cal add_body
 
-    #mov a0, -350.0 # X
-    #mov a1, 0.0 # Y
-    #mov a2, 0.0 # VELOCITY X
-    #mov a3, 766.96 - 151.19 # VELOCITY Y
-    #mov a4, 2*PI/5 # ROTATIONAL ANGULAR VELOCITY
-    #mov a5, 10.0 # RADIUS
-    #mov a6, 50000.0 # MASS
-    #mov a7, 150 # LUMINOSITY
-    #cal add_body
+    mov a0, -350.0 # X
+    mov a1, 0.0 # Y
+    mov a2, 0.0 # VELOCITY X
+    mov a3, 766.96 - 151.19 # VELOCITY Y
+    mov a4, 2*PI/5 # ROTATIONAL ANGULAR VELOCITY
+    mov a5, 10.0 # RADIUS
+    mov a6, 50000.0 # MASS
+    mov a7, 150 # LUMINOSITY
+    cal add_body
 
-    #mov a0, -5000.0 # X
-    #mov a1, 0.0 # Y
-    #mov a2, 0.0 # VELOCITY X
-    #mov a3, 830.45 # VELOCITY Y
-    #mov a4, PI/10 # ROTATIONAL ANGULAR VELOCITY
-    #mov a5, 100.0 # RADIUS
-    #mov a6, 6500000.0 # MASS --- This one is tricky to take off from, but it's possible!
-    #mov a7, 200 # LUMINOSITY
-    #cal add_body
+    mov a0, -5000.0 # X
+    mov a1, 0.0 # Y
+    mov a2, 0.0 # VELOCITY X
+    mov a3, 830.45 # VELOCITY Y
+    mov a4, PI/10 # ROTATIONAL ANGULAR VELOCITY
+    mov a5, 100.0 # RADIUS
+    mov a6, 6500000.0 # MASS --- This one is tricky to take off from, but it's possible!
+    mov a7, 200 # LUMINOSITY
+    cal add_body
 
-    mov a0, 0
-    cal load_system
 
-    mov a0, 1
-    cal save_system
+
+
+    #mov a0, 0
+    #cal load_system
+
+    #mov a0, 0
+    #cal save_system
+
+    cal update_collisions
 
     mov a0, false
     cal center_camera
@@ -450,7 +455,6 @@ title_screen_input:
 
     @endif:
 
-
     ret
 
 #-------------------------------------------------------------------------------
@@ -578,9 +582,8 @@ game_screen_input:
         jfs @end+
         fmul s0, ZOOM_STEP
         lod f32t, a0, distance_scale
-        mov t2, 1.0
         cmp fgt, a0, 7.0
-        mvc t2, 2.0
+        sel t2, 2.0, 1.0
         fmul s0, t2
         mov t1, a0
         fadd a0, s0
@@ -865,9 +868,7 @@ spawn_smoke:
     fsin t3, t4
     fmul t2, t5
     fmul t3, t5
-    lod f32t, t10, distance_scale
-    fdiv t2, t10
-    fdiv t3, t10
+
     fadd t2, t0
     fadd t3, t1
 
@@ -1020,8 +1021,8 @@ update_positions:
         lde f32t, t5, BODY.ROT_AV
 
         # Apply distance scale
-        fdiv t2, s2
-        fdiv t3, s2
+        #fdiv t2, s2
+        #fdiv t3, s2
 
         # Apply deltatime
         fmul t2, s1
@@ -1064,9 +1065,9 @@ update_positions:
 
     @endif:
 
-    # Apply distance scaling
-    fdiv t2, s2
-    fdiv t3, s2
+    ## Apply distance scaling
+    #fdiv t2, s2
+    #fdiv t3, s2
 
     # Apply deltatime
     fmul t2, s1
@@ -1250,9 +1251,8 @@ update_collisions:
             cal normal_vector
 
             lod f32t, t11, PLAYER.collision_radius
-            fadd t4, t11
-            lod f32t, t11, distance_scale
-            fdiv t10, t4, t11
+            fadd t10, t4, t11
+
             ffma t11, a0, t10, t2 # Move player to radius
             ffma t12, a1, t10, t3
             str f32t, PLAYER.x, t11
@@ -1436,9 +1436,7 @@ update_smoke:
             lod f32t, t5, dt
             fmul t2, t5
             fmul t3, t5
-            lod f32t, t6, distance_scale
-            fdiv t2, t6
-            fdiv t3, t6
+
             @if_timescale_lt_1:
                 cmp flt, TIME_SCALE, 1.0
                 jfs @endif2+
@@ -1524,6 +1522,9 @@ check_player_input:
         jfs @end+
         fmul a0, s0, FREECAM_SPEED
         fmul a1, s1, FREECAM_SPEED
+        lod f32t, t2, distance_scale
+        fmul a0,t2
+        fmul a1, t2
         lod f32t, t2, dt
         fmul a0, t2
         fmul a1, t2
@@ -1632,8 +1633,6 @@ player_move:
         # Player is moved towards the planet as well to help avoid flinging yourself off
         fabs t8
         lde f32t, t8, BODY.R
-        lod f32t, t9, distance_scale
-        fdiv t8, t9
         fdiv t8, 2.0
         fmul t6, t8
         fmul t7, t8
@@ -1824,13 +1823,6 @@ check_collision:
     fmul t7, t10
     fmul t8, t10
 
-    # Apply distance scale
-    lod f32t, t10, distance_scale
-    fdiv t2, t10
-    fdiv t3, t10
-    fdiv t7, t10
-    fdiv t8, t10
-
     # Add velocities
     fadd t0, t2
     fadd t1, t3
@@ -1847,8 +1839,6 @@ check_collision:
 
     # Add Radii
     fadd t4, t9
-    lod f32t, t10, distance_scale
-    fdiv t4, t10
 
     # Check if distance is less than radii
     cmp flt, t2, t4
@@ -1877,13 +1867,6 @@ check_player_collision:
     fmul t7, t10
     fmul t8, t10
 
-    # Apply distance scale
-    lod f32t, t10, distance_scale
-    fdiv t2, t10
-    fdiv t3, t10
-    fdiv t7, t10
-    fdiv t8, t10
-
     # Add velocities
     fadd t0, t2
     fadd t1, t3
@@ -1908,10 +1891,6 @@ check_player_collision:
         jfs @endif+
         fadd t4, GROUNDED_PLAYER_COLLISION_MARGIN
     @endif:
-
-    # Apply distance scale
-    lod f32t, t5, distance_scale
-    fdiv t4, t5
 
     # Check if distance is less than body radius
     cmp flt, t2, t4
@@ -1938,9 +1917,6 @@ get_gravity_vector:
     fdiv t0, t3 # dx/r
     fdiv t1, t3 # dy/r
 
-    # Scale Distance
-    lod f32t, t5, distance_scale
-    fmul t3, t5
     fpow t2, t3, 2.0 # r^2
 
     # Calculate gravitational acceleration
@@ -2024,13 +2000,13 @@ bmk "Drawing"
 sbmk "Draw Player"
 draw_player:
     # s0: Which version of the player sprite (based on zoom)
-    psh s0
+    vpsh s0..s1
 
     lod u8t, cr, PLAYER.is_alive
     jfs @end+
 
-    lod f32t, t0, distance_scale
-    fsub s0, t0, 1.0
+    lod f32t, s1, distance_scale
+    fsub s0, s1, 1.0
     fdiv s0, 2.0
 
     @if_zoomed_out:
@@ -2038,8 +2014,11 @@ draw_player:
         jfs @else+
         lod f32t, t0, PLAYER.x
         lod f32t, t1, PLAYER.y
-        fadd t0, CENTER_X_F
-        fadd t1, CENTER_Y_F
+        ffma t0, s1, CENTER_X_F, t0
+        ffma t1, s1, CENTER_Y_F, t1
+        # Apply distance scale
+        fdiv t0, s1
+        fdiv t1, s1
         frou t0
         frou t1
         fcti t0
@@ -2062,8 +2041,11 @@ draw_player:
         # Draw pos
         lod f32t, t0, PLAYER.x
         lod f32t, t1, PLAYER.y
-        fadd t0, CENTER_X_F
-        fadd t1, CENTER_Y_F
+        ffma t0, s1, CENTER_X_F, t0
+        ffma t1, s1, CENTER_Y_F, t1
+        # Apply distance scale
+        fdiv t0, s1
+        fdiv t1, s1
         frou t0
         frou t1
         fcti t0
@@ -2101,10 +2083,14 @@ draw_player:
         jfs @endif+
         lod f32t, t0, PLAYER.x
         lod f32t, t1, PLAYER.y
-        fadd a0, t0, CENTER_X_F
-        fadd a1, t1, CENTER_Y_F
+        ffma a0, t0, CENTER_X_F, t0
+        ffma a1, t1, CENTER_Y_F, t1
+        fdiv a0, s1
+        fdiv a1, s1
         lod f32t, t2, global_velx
         lod f32t, t3, global_vely
+        fdiv t2, s1
+        fdiv t3, s1
         ffma a2, t2, VELOCITY_VISUAL_SCALE, a0
         ffma a3, t3, VELOCITY_VISUAL_SCALE, a1
         mov a4, VELOCITY_VECTOR_START_LUMA
@@ -2113,7 +2099,7 @@ draw_player:
     @endif:
 
     @end:
-    pop s0
+    vpop s0..s1
     ret
 
 #-------------------------------------------------------------------------------
@@ -2132,11 +2118,13 @@ draw_bodies:
         cea system_bodies, s0, BODY.SIZE
         lde f32t, t0, BODY.X
         lde f32t, t1, BODY.Y
-        fadd a0, t0, CENTER_X_F
-        fadd a1, t1, CENTER_Y_F
+        lod f32t, t2, distance_scale
         lde f32t, a2, BODY.R
-        lod f32t, t1, distance_scale
-        fdiv a2, t1
+        ffma a0, CENTER_X_F, t2, t0
+        ffma a1, CENTER_Y_F, t2, t1
+        fdiv a0, t2
+        fdiv a1, t2
+        fdiv a2, t2
         #fdiv t4, 2.0
 
         @is_body_offscreen:
@@ -2147,13 +2135,13 @@ draw_bodies:
             cmp flt, t0, 0.0
             jtr @skipdraw+
             fsub t0, a0, a2
-            cmp flt, t0, SCREEN_WIDTH_F
+            cmp flt, t0, fcast SCREEN_WIDTH
             jfs @skipdraw+
             fsub t0, a1, a2
-            cmp flt, t0, SCREEN_HEIGHT_F
+            cmp flt, t0, fcast SCREEN_HEIGHT
             jfs @skipdraw+
 
-        fadd t4, t1, 1.0
+        fadd t4, t2, 1.0
         fsqrt t4
         lde u16t, t5, BODY.LUM
         fctf t5
@@ -2199,16 +2187,19 @@ draw_bodies:
             cea system_bodies, s0, BODY.SIZE
             lde f32t, t0, BODY.X
             lde f32t, t1, BODY.Y
-            fadd a0, t0, CENTER_X_F
-            fadd a1, t1, CENTER_Y_F
-            lde f32t, t2, BODY.VX
-            lde f32t, t3, BODY.VY
+            lod f32t, t2, distance_scale
+            ffma a0, CENTER_X_F, t2, t0
+            ffma a1, CENTER_Y_F, t2, t1
+            lde f32t, t3, BODY.VX
+            lde f32t, t4, BODY.VY
+            fdiv t3, t2
+            fdiv t4, t2
             #lod f32t, t4, global_velx
             #lod f32t, t5, global_vely
             #fadd t2, t4
             #fadd t3, t5
-            ffma a2, t2, VELOCITY_VISUAL_SCALE, a0
-            ffma a3, t3, VELOCITY_VISUAL_SCALE, a1
+            ffma a2, t3, VELOCITY_VISUAL_SCALE, a0
+            ffma a3, t4, VELOCITY_VISUAL_SCALE, a1
             mov a4, VELOCITY_VECTOR_START_LUMA
             mov a5, VELOCITY_VECTOR_END_LUMA
             cal draw_gradient_line
@@ -2266,6 +2257,11 @@ draw_background:
 #-------------------------------------------------------------------------------
 sbmk "Draw Smoke"
 draw_smoke:
+
+    psh s0 # distance scale
+
+    lod f32t, s0, distance_scale
+
     mov t15, zr
     @loop:
         cmp lt, t15, SMOKE.MAX_SMOKE_COUNT
@@ -2277,8 +2273,10 @@ draw_smoke:
         .if_smoke_alive:
             cmp fgt, t2, 0.0
             jfs @endif+
-            fadd t0, CENTER_X_F
-            fadd t1, CENTER_Y_F
+            ffma t0, s0, CENTER_X_F, t0
+            ffma t1, s0, CENTER_Y_F, t1
+            fdiv t0, s0
+            fdiv t1, s0
             frou t0
             frou t1
             fcti t0
@@ -2292,8 +2290,7 @@ draw_smoke:
                 jfs @endif2+
                 cmp lt, t1, SCREEN_HEIGHT
                 jfs @endif2+
-                lod f32t, t3, distance_scale # Use a dimmer color when zoomed out
-                fcti t3
+                fcti t3, s0 # Use a dimmer color when zoomed out
                 sub t3, 1
                 div t3, 2
                 max t3, 1
@@ -2304,6 +2301,7 @@ draw_smoke:
     inc t15
     jmp @loop-
     @endloop:
+    pop s0
     ret
 
 #-------------------------------------------------------------------------------
@@ -2637,8 +2635,11 @@ move_camera:
     # Update Background offset
     lod f32t, t0, bg_offset_x
     lod f32t, t1, bg_offset_y
+    lod f32t, t4, distance_scale
     fmul t2, a0, BG_SCROLL_SCALE
     fmul t3, a1, BG_SCROLL_SCALE
+    fdiv t2, t4
+    fdiv t3, t4
     fadd t0, t2
     fadd t1, t3
     fmod t0, fcast SCREEN_WIDTH
@@ -2660,6 +2661,7 @@ center_camera:
     lod f32t, a1, PLAYER.y
     lod f32t, s0, distance_scale
     fdiv t2, CAMERA_SPEED, s0
+    #mov t2, CAMERA_SPEED
 
     mov t0, a0
     mov t1, a1
@@ -2683,16 +2685,15 @@ center_camera:
         ffma t5, t6, GROUNDED_DISTANCE, t5
         lod f32t, t6, PLAYER.collision_radius
         fadd t5, t6
-        fdiv t5, s0
         cmp flt, a2, t5
         jfs @endif+
-        mov a2, 0
         lod i8t, t6, control_camera_offset_scalar
         lod u8t, cr, PLAYER.is_grounded
-        mvc a2, t6
+        sel a2, t6, 0
         fctf a2
-        fdiv t3, CAMERA_OFFSET, s0
-        ffma a2, -CAMERA_OFFSET, t3
+        #fdiv t3, CAMERA_OFFSET, s0
+        fmul t3, -CAMERA_OFFSET, s0
+        ffma a2, t3, CAMERA_OFFSET
         ffma t0, a0, a2, t0
         ffma t1, a1, a2, t1
     @endif:
@@ -2706,8 +2707,6 @@ center_camera:
     @end:
 
     cal move_camera
-    #str f32t, PLAYER.x, 0.0
-    #str f32t, PLAYER.y, 0.0
     vpop s0..s1
     ret
 
@@ -2720,59 +2719,6 @@ set_distance_scale:
     lod f32t, t13, distance_scale
     mov t15, zr # Object counter
     lod u8t, t14, system_bodies_count
-    @loop:
-        cmp lt, t15, t14
-        jfs @endloop+
-
-        cea system_bodies, t15, BODY.SIZE
-        lde f32t, t0, BODY.X
-        lde f32t, t1, BODY.Y
-        # Multiply by previous distance scale
-        fmul t0, t13
-        fmul t1, t13
-        # Divide by new distance scale
-        fdiv t0, a0
-        fdiv t1, a0
-        # Store new position
-        ste f32t, BODY.X, t0
-        ste f32t, BODY.Y, t1
-
-        inc t15
-        jmp @loop-
-    @endloop:
-    # Player
-    lod f32t, t0, PLAYER.x
-    lod f32t, t1, PLAYER.y
-    # Divide by previous distance scale
-    fmul t0, t13
-    fmul t1, t13
-    # Multiply by new distance scale
-    fdiv t0, a0
-    fdiv t1, a0
-    # Store new position
-    str f32t, PLAYER.x, t0
-    str f32t, PLAYER.y, t1
-
-    # Smoke
-    mov t15, zr
-    @loop:
-        cmp lt, t15, SMOKE.MAX_SMOKE_COUNT
-        jfs @endloop+
-        cea smoke, t15, SMOKE.SIZE
-        lde f32t, t0, SMOKE.X
-        lde f32t, t1, SMOKE.Y
-        # Divide by previous distance scale
-        fmul t0, t13
-        fmul t1, t13
-        # Multiply by new distance scale
-        fdiv t0, a0
-        fdiv t1, a0
-        ste f32t, SMOKE.X, t0
-        ste f32t, SMOKE.Y, t1
-
-        inc t15
-        jmp @loop-
-    @endloop:
     str f32t, distance_scale, a0
     @if_freecam_disabled:
         lod u8t, cr, freecam_enabled
@@ -3100,10 +3046,10 @@ DrawPAcircle:
         cmp flt, t0, 0.0
         jtr @end+
         fsub t0, a0, a2
-        cmp fgt, t0, SCREEN_WIDTH_F
+        cmp fgt, t0, fcast SCREEN_WIDTH
         jtr @end+
         fsub t0, a1, a2
-        cmp fgt, t0, SCREEN_HEIGHT_F
+        cmp fgt, t0, fcast SCREEN_HEIGHT
         jtr @end+
 
     mov s0, a0 # centre x
