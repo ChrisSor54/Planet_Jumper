@@ -65,7 +65,7 @@ def TIME_SCALE 1.0 # How fast the simulation runs. Must be greater than 0 or thi
 sbmk "Visualization Settings"
 
 def ZOOM_STEP 2.0 # How much to change zoom when zoom commands are input
-def MAX_ZOOM 128.0 # Keep this as a multiple of 2
+def MAX_ZOOM 256.0 # Keep this as a multiple of 2
 def MIN_ZOOM 1.0
 def CAMERA_SPEED 0.5
 def FREECAM_SPEED 100.0
@@ -87,7 +87,7 @@ def BG_SCROLL_SCALE 0.1 # How much the background moves relative to the foregrou
 
 
 #-------------------------------------------------------------------------------
-sbmk "Input Bindings"
+sbmk "Enums"
 
 INPUT:
     def .JUMP BTN_A
@@ -96,6 +96,52 @@ INPUT:
     def .ZOOM_OUT BTN_Y
     def .PAUSE BTN_START
     def .FREE_CAM BTN_SELECT
+
+STRINGS:
+    # Data Headers
+    .SYS_DATA_HEADER: emb string "SYS#"
+    def .SYS_DATA_HEADER_SIZE ($ - STRINGS.SYS_DATA_HEADER - 1) # No need to save terminator
+    .PLAYER_DATA_HEADER: emb string "PLR"
+    def .PLAYER_DATA_HEADER_SIZE ($ - STRINGS.PLAYER_DATA_HEADER - 1)
+    .BODIES_DATA_HEADER: emb string "BDS"
+    def .BODIES_DATA_HEADER_SIZE ($ - STRINGS.BODIES_DATA_HEADER - 1)
+    def .DATA_HEADER_SIZE ($ - STRINGS)+3 # 3 Additional bytes for the sysID ascii
+
+    # Menus
+    .START: emb string "PRESS START"
+    .NEW_SYSTEM: emb string "NEW SYSTEM"
+    .LOAD_SYSTEM: emb string "LOAD SYSTEM"
+
+    # Game HUD
+    .JUMP: emb string ":JUMP"
+    .WALK: emb string ":WALK"
+    .CANCEL: emb string ":CANCEL"
+    .MATCH: emb string ":MATCH"
+    .PLAYER: emb string ":PLAYER"
+    .GLOBAL: emb string ":GLOBAL"
+    .ZOOM_IN: emb string ":ZOOM+"
+    .ZOOM_OUT: emb string ":ZOOM-"
+    .FREECAM: emb string "FREECAM"
+    .EDITOR: emb string "EDITOR"
+    .PAUSE: emb string "GAME PAUSED"
+    .TOGGLE_EDITOR: emb string ":TOGGLE EDITOR"
+
+    # Editor
+    .ADD_BODY: emb string ":ADD"
+    .REMOVE_BODY: emb string ":REMOVE"
+    .BODY_ID: emb string "ID:"
+
+    # Errors
+    .ERR_INVALID_SYSTEM_ID: emb string "ERROR: INVALID SYSTEM ID"
+
+MAIN_MENU:
+    def .NEW_SYSTEM 0
+    def .LOAD_SYSTEM 1
+
+#COMMANDS:
+    #.ZOOM_IN: emb string "ZOOM_IN"
+    #.ZOOM_OUT: emb string "ZOOM_OUT"
+
 
 #-------------------------------------------------------------------------------
 sbmk "Debug Settings"
@@ -243,47 +289,6 @@ freecam_enabled: emb u8t false
 freecam_relative_velocity_enabled: emb u8t true
 editor_enabled: emb u8t false
 #zoom_toggled: emb u8t true
-
-#-------------------------------------------------------------------------------
-bmk "STRINGS"
-
-STRINGS:
-    # Data Headers
-    .SYS_DATA_HEADER: emb string "SYS#"
-    def .SYS_DATA_HEADER_SIZE ($ - STRINGS.SYS_DATA_HEADER - 1) # No need to save terminator
-    .PLAYER_DATA_HEADER: emb string "PLR"
-    def .PLAYER_DATA_HEADER_SIZE ($ - STRINGS.PLAYER_DATA_HEADER - 1)
-    .BODIES_DATA_HEADER: emb string "BDS"
-    def .BODIES_DATA_HEADER_SIZE ($ - STRINGS.BODIES_DATA_HEADER - 1)
-    def .DATA_HEADER_SIZE ($ - STRINGS)+3 # 3 Additional bytes for the sysID ascii
-
-    # Menus
-    .START: emb string "PRESS START"
-    .LOAD_SYSTEM: emb string "LOAD SYSTEM"
-    .EDIT_SYSTEM: emb string "EDIT SYSTEM"
-
-    # Game HUD
-    .JUMP: emb string ":JUMP"
-    .WALK: emb string ":WALK"
-    .CANCEL: emb string ":CANCEL"
-    .MATCH: emb string ":MATCH"
-    .PLAYER: emb string ":PLAYER"
-    .GLOBAL: emb string ":GLOBAL"
-    .ZOOM_IN: emb string ":ZOOM+"
-    .ZOOM_OUT: emb string ":ZOOM-"
-    .FREECAM: emb string "FREECAM"
-    .EDITOR: emb string "EDITOR"
-    .PAUSE: emb string "GAME PAUSED"
-    .TOGGLE_EDITOR: emb string ":TOGGLE EDITOR"
-    .ADD_BODY: emb string ":ADD"
-    .REMOVE_BODY: emb string ":REMOVE"
-
-    # Errors
-    .ERR_INVALID_SYSTEM_ID: emb string "ERROR: INVALID SYSTEM ID"
-
-Commands:
-    .ZOOM_IN: emb string "ZOOM_IN"
-    .ZOOM_OUT: emb string "ZOOM_OUT"
 
 #-------------------------------------------------------------------------------
 bmk "-------------------------"
@@ -643,8 +648,8 @@ main_menu_draw:
             syscall SYS_DRAW_TEXTURE_REGION
             add a1, 16
         @endif:
-            cmp eq, s1, 0
-            sel a0, STRINGS.LOAD_SYSTEM, STRINGS.EDIT_SYSTEM
+            cmp eq, s1, MAIN_MENU.NEW_SYSTEM
+            sel a0, STRINGS.NEW_SYSTEM, STRINGS.LOAD_SYSTEM
 
             cal draw_string
             inc s1
@@ -948,7 +953,7 @@ save_system:
         mov a1, s1
         mov s1, a0
         mov a0, s0
-        cal get_digit
+        cal get_digit_int
         mov t0, a0
         mov a0, s1
         mov s1, a1
@@ -2400,13 +2405,18 @@ draw_player:
     # s0: Which version of the player sprite (based on zoom)
     vpsh s0..s1
 
-    lod u8t, cr, PLAYER.is_alive
-    jfs @end+
+    def .PLAYER_MAX_DRAW_DISTANCE 128.0 # Distance scale before player is no longer drawn
 
-    lod f32t, s0, distance_scale
+    lod u8t, cr, PLAYER.is_alive
+    jfs @skipdraw+
+
+    lod f32t, s0, distance_scale # Don't draw a microscopic player
+    cmp fgt, s0, .PLAYER_MAX_DRAW_DISTANCE
+    jtr @skipdraw+
+
 
     @if_zoomed_out:
-        cmp gt, s0, 4.0
+        cmp fgt, s0, 4.0
         jfs @else+
         lod f32t, t0, PLAYER.x
         lod f32t, t1, PLAYER.y
@@ -2494,7 +2504,7 @@ draw_player:
         cal draw_gradient_line
     @endif:
 
-    @end:
+    @skipdraw:
     vpop s0..s1
     ret
 
@@ -2527,6 +2537,9 @@ draw_bodies:
         fdiv a0, t2
         fdiv a1, t2
         fdiv a2, t2
+
+        cmp flt, a2, 0.1 # Don't draw miniscule objects
+        jtr @skipdraw+
         #fdiv t4, 2.0
 
         @is_body_offscreen:
@@ -2547,7 +2560,19 @@ draw_bodies:
         pow t6, 2, t6
         lde u16t, t5, BODY.LUM
         div t4, t5, t6 # Divide luminosity by the square of the zoom scale
-        fclp a3, t4, 1, 255 # Clamp luma
+        div t7, t5, 6 # Limit reduction to an 8th of the base luminosity
+        max t4, t7
+        clp a3, t4, 1, 255 # Clamp luma
+
+        @if_tiny:
+            cmp flt, a2, 1.0
+            jfs @endif+
+            fcti t0, a0
+            fcti t1, a1
+            sbpx t0, t1, 255
+            jmp @skipdraw+
+        @endif:
+
         lod u8t, t0, selected_body_index
         cmp eq, s0, t0
         mvc a3, 255 # Selected body has full luma
@@ -2562,12 +2587,13 @@ draw_bodies:
             mov s1, a0
             mov s2, a1
             mov s3, a2
+            cmp flt, a2, 4.0 # Minimum radius before rotation lines are no longer drawn
+            jtr @endif+
             cea system_bodies, s0, BODY.SIZE
             lde f32t, s4, BODY.ROT
             fadd s5, s4, 2*PI
-            mov a4, 1
             cmp lt, a3, 255/2
-            mvc a4, 255
+            sel a4, 200, 1
             @draw_loop:
                 fcos t1, s4
                 fsin t2, s4
@@ -2954,6 +2980,23 @@ draw_hud:
         syscall SYS_DRAW_TEXTURE_REGION
     @end:
 
+    @selected_body:
+        cmp eq, s1, 6 # if body is selected
+        jfs @end+
+
+        mov a0, STRINGS.BODY_ID
+        cal load_string
+
+        add a0, buffer
+        lod u8t, a1, selected_body_index
+        cal int_to_ascii
+
+        mov a0, buffer
+        mov a1, LEFT_EDGE
+        mov a2, TOP_EDGE + 56
+        cal draw_string
+    @end:
+
     # Zoom bar
 
     mov a0, HUD_SPRITESHEET
@@ -3013,9 +3056,8 @@ draw_string:
         lod u8t, t0, s0
         cmp eq, t0, 0
         jtr @endloop+
-        mov t1, 32
         cmp gt, t0, 96 # if lowercase, convert to uppercase
-        mvc t1, 64
+        sel t1, 64, 32
         sub t0, t1
         mod a3, t0, 13
         div a4, t0, 13
@@ -3122,8 +3164,8 @@ center_camera:
     lod f32t, a0, PLAYER.x
     lod f32t, a1, PLAYER.y
     lod f32t, s0, distance_scale
-    fdiv t2, CAMERA_SPEED, s0
-    #mov t2, CAMERA_SPEED
+    #fmul t2, CAMERA_SPEED, s0
+    mov t2, CAMERA_SPEED
 
     mov t0, a0
     mov t1, a1
@@ -3290,8 +3332,8 @@ cmp_strings:
     ret
 
 #-------------------------------------------------------------------------------
-sbmk "Get Digit"
-get_digit:
+sbmk "Get Digit Int"
+get_digit_int:
     # > a0: Target number
     # > a1: Which digit to extract. (digit = (a0 - a0*10**(a1+1))/10**a1)
     # < a0: The targeted digit
@@ -3305,6 +3347,65 @@ get_digit:
     sub t2, a0, t3
 
     div a0, t2, t1 # Isolate digit
+    ret
+
+#-------------------------------------------------------------------------------
+sbmk "Int to ASCII"
+int_to_ascii:
+    # > a0*: Destination address
+    # > a1: Number
+    vpsh s0..s1
+
+    vmov s0..s1, a0..
+    # Get order of magnitude
+    mov t0, zr
+    @loop:
+        cmp gte, t0, 8
+        jtr @endloop+
+        pow t1, 10, t0
+        div t2, s1, t1
+        cmp eq, t2, 0
+        jtr @endloop+
+        inc t0
+        jmp @loop-
+    @endloop:
+
+    # Convert to ascii
+    @loop:
+        dec t0
+        cmp lt, t0, 0
+        jtr @endloop+
+        mov a0, s1
+        mov a1, t0
+        cal get_digit_int
+        add a0, 48
+        str u8t, s0, a0
+        inc s0
+        jmp @loop-
+    @endloop:
+
+    str u8t, s0, 0 # Add terminator
+    vpop s0..s1
+    ret
+
+#-------------------------------------------------------------------------------
+sbmk "Load String to Buffer"
+load_string:
+    # > a0*: String address
+    # < a0: String size
+
+    mov t0, a0
+    mov a0, zr
+    @loop:
+        add t1, t0, a0
+        add t2, buffer, a0
+        lod u8t, t3, t1
+        str u8t, t2, t3
+        cmp eq, t3, 0
+        jtr @endloop+
+        inc a0
+        jmp @loop-
+    @endloop:
     ret
 
 #-------------------------------------------------------------------------------
