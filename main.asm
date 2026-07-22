@@ -130,7 +130,16 @@ STRINGS:
     .REMOVE_BODY: emb string ":REMOVE"
     .NEXT: emb string ":NEXT"
     .BACK: emb string ":BACK"
+    .POS: emb string "POS:"
+    .X: emb string "X:"
+    .Y: emb string "Y:"
+    .VEL: emb string "VELOCITY:"
+    .ROT: emb string "ROTATION:"
+    .R: emb string "RADIUS:"
+    .M: emb string "MASS:"
+    .LUM: emb string "LUMINOSITY:"
     .BODY_ID: emb string "ID:"
+    
 
     # Errors
     .ERR_INVALID_SYSTEM_ID: emb string "ERROR: INVALID SYSTEM ID"
@@ -2992,7 +3001,8 @@ draw_hud:
     #   s2: Zoom
     #   s3: 1: Freecam, 2: Editor
     #   s4: Cursor
-    #   s5: Editor State
+    #   s5: 1: Body ID, 2: Position, 3: Velocity, 4: Rotation, 5: Radius, 6: Mass,
+    #       7: Luminosity
 
     vpsh s0..s5
 
@@ -3036,6 +3046,7 @@ draw_hud:
             lod i8t, t0, selected_body_index
             cmp gte, t0, 0
             mvc s1, 6
+            mvc s5, 1
             sel s0, 3, 2
             jmp @endif+
 
@@ -3264,11 +3275,22 @@ draw_hud:
         syscall SYS_DRAW_TEXTURE_REGION
     @end:
 
-    @selected_body:
-        cmp eq, s1, 6 # if body is selected
+    @editor:
+        cmp neq, s5, 0 # if body is selected
         jfs @end+
-
         mov a0, STRINGS.BODY_ID
+        cmp eq, s5, 2
+        mvc a0, STRINGS.POSITION
+        cmp eq, s5, 3
+        mvc a0, STRINGS.VEL
+        cmp eq, s5, 4
+        mvc a0, STRINGS.ROT
+        cmp eq, s5, 5
+        mvc a0, STRINGS.R
+        cmp eq, s5, 6
+        mvc a0, STRINGS.M
+        cmp eq, s5, 7
+        mvc a0, STRINGS.LUM
         cal load_string
 
         add a0, buffer
@@ -3800,11 +3822,26 @@ get_digit_int:
     add t2, a1, 1
     pow t2, 10, t2
 
-    div t3, a0, t2 # Isolate previous digit
-    mul t3, t2
-    sub t2, a0, t3
+    mod a0, t2 # Isolate previous digit
+    div a0, t1 # Isolate digit
+    ret
 
-    div a0, t2, t1 # Isolate digit
+#-------------------------------------------------------------------------------
+sbmk "Get Digit Float"
+get_digit_float:
+    # > a0: Target number
+    # > a1: Which digit to extract. (digit = (a0 - a0*10**(a1+1))/10**a1)
+    # < a0: The targeted digit
+
+    pow t1, 10, a1
+    add t2, a1, 1
+    pow t2, 10, t2
+
+    fctf t3, t1
+    fctf t4, t2
+
+    fmod a0, t3 # Isolate previous digit
+    fdiv a0, t4 # Isolate digit
     ret
 
 #-------------------------------------------------------------------------------
