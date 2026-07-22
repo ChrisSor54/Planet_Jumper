@@ -8,13 +8,9 @@ bmk "About"
 # This is primarily a 2D n-body gravity simulation, but it also features
 # a playable character with which to jump around the various gravitational bodies.
 
-# The code is absolutely messy, partially due to my inexperience and partially due to me switching to
-# using relative positioning and velocities far into it's development, so apologies to those more experienced lol
+# The code is absolutely messy, partially due to my inexperience and having to learn
+# the system as I went, so apologies to those more experienced lol
 
-# Some credit goes to Flatik, who uploaded a similar gravity simulation. Although none
-# of the code was copied (despite how surprisingly similar certain elements turned out)
-# I did incorporate some of their optimizations in a small few places, so I'd like to
-# give them a shoutout nonetheless :)
 
 
 #-------------------------------------------------------------------------------
@@ -47,6 +43,8 @@ def PLAYER_SPRITE_WIDTH 8
 def PLAYER_SPRITE_WIDTH_F 8.0
 
 def SCREENS_TEXTURE_WIDTH 640
+
+def NEWLINE 10
 
 def BG_TEX_WIDTH 320
 def BG_TEX_HEIGHT 240
@@ -128,7 +126,10 @@ STRINGS:
 
     # Editor
     .ADD_BODY: emb string ":ADD"
+    .EDIT_BODY: emb string ":EDIT"
     .REMOVE_BODY: emb string ":REMOVE"
+    .NEXT: emb string ":NEXT"
+    .BACK: emb string ":BACK"
     .BODY_ID: emb string "ID:"
 
     # Errors
@@ -137,6 +138,12 @@ STRINGS:
 MAIN_MENU:
     def .NEW_SYSTEM 0
     def .LOAD_SYSTEM 1
+
+def MENU_COUNT 1
+
+MENUS:
+    def .NO_MENU 0
+    def .PAUSE_MENU 1
 
 #COMMANDS:
     #.ZOOM_IN: emb string "ZOOM_IN"
@@ -242,6 +249,29 @@ SMOKE:
     def .LIFESPAN (.lifespan - SMOKE)
     def .SIZE ($ - SMOKE)
 
+
+#-------------------------------------------------------------------------------
+sbmk "Menu"
+
+MENU:
+    def .MAX_OPTIONS 10
+
+    .name: res u32t 1 # Menu name address
+    .x: emb u16t 0 # Menu x position
+    .y: emb u16t 0 # Menu y position
+    .options_count: emb u8t 0 # Number of options
+    .option_names: res u32t 1 # Option names address
+    .option_addresses: res u32t 1 # Option addresses array address
+
+    def .NAME (.name - MENU)
+    def .X (.x - MENU)
+    def .Y (.y - MENU)
+    def .OPTIONS_COUNT (.options_count - MENU)
+    def .OPTION_NAMES (.option_names - MENU)
+    def .OPTION_FUNCS (.option_addresses - MENU)
+    def .SIZE ($ - MENU)
+
+
 #-------------------------------------------------------------------------------
 bmk "ARRAYS"
 
@@ -250,6 +280,7 @@ system_bodies: res u8t SYSTEM_SIZE
 system_bodies_count: emb u8t 0
 smoke: res u8t SMOKE.SIZE*SMOKE.MAX_SMOKE_COUNT
 buffer: res u8t MAX_TERMINAL_INPUT_SIZE
+menus: res u8t MENU.SIZE*(MENU_COUNT+1)
 
 #-------------------------------------------------------------------------------
 bmk "VARIABLES"
@@ -260,6 +291,9 @@ SCREENS:
 
 def STARTING_SCREEN SCREENS.GAME_SCREEN
 _current_screen: emb u8t STARTING_SCREEN # Which screen the player is currently in
+
+current_active_menu_index: emb u8t MENUS.NO_MENU # Hold adress of the current active menu
+current_menu_selection: emb u8t 0 # Which item on a menu is selected
 
 distance_scale: emb f32t 1.0 # Distance per pixel in km
 zoom_value: emb i8t 0 # How far the camera is zoomed out
@@ -273,7 +307,6 @@ freecam_pos_x: emb f32t 0.0
 freecam_pos_y: emb f32t 0.0
 control_camera_offset_scalar: emb i8t 0 # -1, 1, or 1, used for controlling the camera with up and down
 
-current_menu_selection: emb u8t 0 # Which item on a menu is selected
 input_value_x_f: emb f32t 0.0
 input_value_y_f: emb f32t 0.0
 input_value_x: emb i32t 0
@@ -282,7 +315,7 @@ input_value_y: emb i32t 0
 selected_body_index: emb i8t -1 # index of planet the cursor is on. -1 for none selected
 
 # Flags
-player_initialized: emb u8t false
+player_move_initialized: emb u8t false
 game_paused: emb u8t false # Used for pausing the game
 smoke_can_spawn: emb u8t false
 freecam_enabled: emb u8t false
@@ -300,6 +333,8 @@ bmk "PROCESSES"
 sbmk "Start"
 _start: # Runs once when the VM starts.
     # Initialize your game state here.
+
+    cal load_menus
 
     mov a0, -34000.0 # X
     mov a1, 0.0 # Y
@@ -710,10 +745,9 @@ game_screen_start:
     str f32t, bg_offset_y, 0.0
     lod u8t, a0, system_id
     cal load_system
+    cal update_collisions # Update collisions to fix overlapping positions
     mov a0, false
     cal center_camera
-    cal update_collisions # Update collisions to fix overlapping positions
-
     str u8t, _current_screen, SCREENS.GAME_SCREEN
     ret
 
@@ -735,7 +769,7 @@ game_screen_update:
         lod u8t, cr, editor_enabled
         jfs @endif+
 
-        cal check_player_input
+        cal freecam_input
         cal update_selected_body
         jmp @end_update+
     @endif:
@@ -781,6 +815,7 @@ game_screen_draw:
     cal draw_bodies
     cal draw_player
     cal draw_hud
+    cal draw_menu
 
     ret
 
@@ -826,41 +861,16 @@ game_screen_input:
     cmp neq, t0, 0
     mov s4, cr
 
-    @editor_enabled:
-        lod u8t, cr, editor_enabled
-        jfs @endif+
-
-        @remove_body:
-            mov cr, a4
-            jfs @end+
-            @if_body_selected:
-                lod i8t, t0, selected_body_index
-                cmp gte, t0, 0
-                jfs @endif+
-                mov t1, a0
-                mov a0, t0
-                cal remove_body
-                mov a0, t1
-            @endif:
-        @end:
-    @endif:
-
-
-    @toggle_editor:
-        lod u8t, cr, game_paused
-        jfs @endif+
-        mov cr, s4
-        jfs @endif+
-        lod u8t, t0, editor_enabled
-        cmp eq, t0, false
-        str u8t, editor_enabled, cr
-        str u8t, freecam_relative_velocity_enabled, cr
-        str u8t, game_paused, false
-    @endif:
-
     @zoom:
         cmp neq, s0, 0
         jfs @end+
+        lod u8t, t0, editor_enabled
+        lod u8t, t1, current_menu_selection
+        cmp neq, t1, 0
+        and cr, t0
+        jtr @end+
+
+
         #fmul s0, ZOOM_STEP
         lod f32t, t0, distance_scale
         lod i8t, t1, zoom_value
@@ -878,10 +888,45 @@ game_screen_input:
     @toggle_pause:
         mov cr, s2
         jfs @end+
-        lod u8t, t0, game_paused
-        cmp eq, t0, false
-        str u8t, game_paused, cr
+        lod u8t, cr, game_paused
+        sel t0, false, true
+        str u8t, game_paused, t0
+        sel t0, MENUS.NO_MENU, MENUS.PAUSE_MENU
+        str u8t, current_active_menu_index, t0
+        str u8t, current_menu_selection, 0
     @end:
+
+    @if_menu_active:
+        lod u8t, t0, current_active_menu_index
+        cmp neq, t0, 0
+        jfs @endif+
+
+        cea menus, t0, MENU.SIZE
+        lde u8t, t1, MENU.OPTIONS_COUNT
+        lod u8t, t2, current_menu_selection
+        add t2, a2
+        mod t2, t1
+        str u8t, current_menu_selection, t2
+        lde u32t, t3, MENU.OPTION_FUNCS
+
+        cea t3, t2, 4
+        lde u32t, t4, 0
+
+        cala t4
+        str u8t, player_move_initialized, false
+        jmp @end_input+
+    @endif:
+
+
+
+
+
+    @editor_enabled:
+        lod u8t, cr, editor_enabled
+        jfs @endif+
+        cal check_editor_input
+        jmp @end_input+
+    @endif:
 
     @toggle_freecam:
         mov cr, s3
@@ -907,8 +952,52 @@ game_screen_input:
         cmp eq, t0, false
         str u8t, freecam_relative_velocity_enabled, cr
     @end:
+
+    @end_input:
     vpop s0..s4
     ret
+
+#-------------------------------------------------------------------------------
+bmk "-------------------------"
+
+#-------------------------------------------------------------------------------
+bmk "MENUS"
+
+sbmk "Pause Menu"
+PAUSE_MENU:
+    def .POS_X SCREEN_WIDTH/2 - 96
+    def .POS_Y SCREEN_HEIGHT/2 - 48
+    .MENU_NAME: emb string "GAME PAUSED"
+    def .OPTIONS_COUNT 2
+    .OPTION_NAMES: emb string "TOGGLE EDITOR\nRESET"
+    .OPTION_FUNCS: emb u32t .toggle_editor, .reset
+
+    .toggle_editor:
+        mov cr, a3
+        jfs @end+
+        lod u8t, t0, editor_enabled
+        cmp eq, t0, false
+        str u8t, editor_enabled, cr
+        str u8t, freecam_relative_velocity_enabled, cr
+        str u8t, game_paused, false
+        str u8t, current_active_menu_index, 0
+        @end:
+
+        ret
+
+    .reset:
+        mov cr, a3
+        jfs @end+
+        str u8t, current_active_menu_index, 0
+        str u8t, game_paused, 0
+        #lod u8t, a0, system_id
+        #cal load_system
+        cal reset_system
+        cal update_positions
+        cal update_collisions
+        @end:
+
+        ret
 
 #-------------------------------------------------------------------------------
 bmk "-------------------------"
@@ -1059,15 +1148,69 @@ load_system:
     syscall SYS_STORAGE_READ
     add a1, a2
 
+    lod f32t, t1, PLAYER.x
+    lod f32t, t2, PLAYER.y
+
+    mov t15, zr
+    #@loop:
+        #cmp lt, t15, MAX_BODIES
+        #jfs @endloop+
+        #cea system_bodies, t15, BODY.SIZE
+        #inc t15
+        #lde u8t, cr, BODY.ACTIVE
+        #jfs @loop-
+
+        #lde f32t, t3, BODY.X
+        #lde f32t, t4, BODY.Y
+
+        #fsub t3, t1 # Avoid objects being in the same coordinate to avoid issues
+        #fsub t4, t2
+        #fadd t3, t4
+
+        #@if_body_on_player: # Move the player to the top of any overlapping bodies
+            #cmp eq, t3, 0.0
+            #jfs @endif+
+            #lde f32t, t4, BODY.R
+            #fsub t2, t4
+            #str f32t, PLAYER.y, t2
+            #str u8t, PLAYER.is_grounded, true
+        #@endif:
+        #jmp @loop-
+    #@endloop:
+    str u8t, player_move_initialized, false
+    mov a0, false
+    cal center_camera
+
     @end:
     pop s0
     ret
 
 #-------------------------------------------------------------------------------
-sbmk "Reset"
-reset:
+sbmk "Reset System"
+reset_system:
     # Reset values to default
 
+    lod u8t, a0, system_id
+    cal load_system
+    #str f32t, bg_offset_x, 0.0
+    #str f32t, bg_offset_y, 0.0
+    cal update_collisions
+    ret
+
+#-------------------------------------------------------------------------------
+sbmk "Load Menus"
+load_menus:
+
+    # Pause menu
+    cea menus, MENUS.PAUSE_MENU, MENU.SIZE
+
+    ste u32t, MENU.NAME, PAUSE_MENU.MENU_NAME
+    ste u16t, MENU.X, PAUSE_MENU.POS_X
+    ste u16t, MENU.Y, PAUSE_MENU.POS_Y
+    add t0, ea, MENU.OPTIONS_COUNT
+    ste u8t, MENU.OPTIONS_COUNT, PAUSE_MENU.OPTIONS_COUNT
+    ste u32t, MENU.OPTION_NAMES, PAUSE_MENU.OPTION_NAMES
+    ste u32t, MENU.OPTION_FUNCS, PAUSE_MENU.OPTION_FUNCS
 
     ret
 
@@ -1124,19 +1267,6 @@ add_body:
         jmp @loop-
     @endloop:
 
-    lod f32t, t1, PLAYER.x
-    lod f32t, t2, PLAYER.y
-    fsub t4, t1, a0 # Avoid objects being in the same coordinate to avoid issues
-    fsub t5, t2, a1
-    fadd t4, t5
-    @if_body_on_player: # Move the player to the top of any overlapping bodies
-        cmp eq, t4, 0.0
-        jfs @endif+
-        fsub t2, a5
-
-        str f32t, PLAYER.y, t2
-        str u8t, PLAYER.is_grounded, true
-    @endif:
     ste u8t, BODY.ACTIVE, true
     ste f32t, BODY.X, a0 # Set X pos
     ste f32t, BODY.Y, a1 # Set Y pos
@@ -1349,6 +1479,7 @@ update_positions:
     # s0: body index
     # s1: deltatime
     # s2: distance_scale
+
     vpsh s0..s3
 
     lod f32t, s1, dt
@@ -1402,7 +1533,6 @@ update_positions:
         inc s0
         jmp @loop_bodies-
     @endloop_bodies:
-
 
     # Player position
     lod f32t, t0, PLAYER.x
@@ -1519,6 +1649,7 @@ update_collisions:
     # s12: body2 radius
     # s13: body2 mass
 
+
     vpsh s0..s15
 
     mov s0, zr
@@ -1552,7 +1683,7 @@ update_collisions:
             mov a0, s0
             mov a1, s1
             cal check_collision
-            jfs @skip+
+            jfs @skip2+
             cea system_bodies, s0, BODY.SIZE
             lde f32t, t0, BODY.X
             lde f32t, t1, BODY.Y
@@ -1582,6 +1713,33 @@ update_collisions:
             fmul a1, -1.0, t1
             mov a2, s0
             cal apply_impulse
+
+            cmp gt, t9, t4
+            sel t0, s1, s0
+            sel t1, s0, s1
+
+            cea system_bodies, t0, BODY.SIZE
+            lde f32t, t2, BODY.X
+            lde f32t, t3, BODY.Y
+            lde f32t, t4, BODY.R
+            cea system_bodies, t1, BODY.SIZE
+            lde f32t, t5, BODY.X
+            lde f32t, t6, BODY.Y
+            lde f32t, t7, BODY.R
+            fsub a0, t5, t2
+            fsub a1, t6, t3
+            vpsh t0..t7
+            cal normal_vector
+            vpop t0..t7
+
+            fadd t8, t4, t7
+            ffma t5, a0, t8, t2
+            ffma t6, a1, t8, t3
+
+            cea system_bodies, t1, BODY.SIZE
+            ste f32t, BODY.X, t5
+            ste f32t, BODY.Y, t6
+
 
             @skip2:
             inc s1
@@ -1618,12 +1776,16 @@ update_collisions:
             lde f32t, t4, BODY.R
             lde f32t, t5, BODY.VX
             lde f32t, t6, BODY.VY
-            lde f32t, t7, BODY.ROT_AV
 
             # Get normal vector
             fsub a0, t0, t2 # dx
             fsub a1, t1, t3 # dy
+            fadd t8, a0, a1
+            cmp eq, t8, 0.0
+            fsub t8, a1, 1.0
+            mvc a1, t8
             cal normal_vector
+            vmov t13..t15, a0..
 
             lod f32t, t11, PLAYER.collision_radius
             fadd t10, t4, t11
@@ -1635,20 +1797,7 @@ update_collisions:
 
             str i8t, PLAYER.parent_body_index, s0
 
-            # Angular velocity from planets rotation
-
-            # Get tangent vector
-            fneg t8, a1
-            mov t9, a0
-
-            # Calculate velocity vector
-            fmul a2, t4, t7
-            fmul t2, t8, a2
-            fmul t3, t9, a2
-
-            # Apply rotational angular velocity
-            fadd t5, t2
-            fadd t6, t3
+            vpsh t0..t15
 
             @if_just_collided:
                 lod u8t, cr, PLAYER.is_grounded # Only apply collision impulse on impact
@@ -1667,6 +1816,27 @@ update_collisions:
                 mov a2, s0
                 cal apply_impulse
             @end:
+
+            vpop t0..t15
+            cea system_bodies, s0, BODY.SIZE
+            lde f32t, t5, BODY.VX
+            lde f32t, t6, BODY.VY
+            lde f32t, t7, BODY.ROT_AV
+
+            # Angular velocity from planets rotation
+
+            # Get tangent vector
+            fneg t8, t14
+            mov t9, t13
+
+            # Calculate velocity vector
+            fmul t15, t10, t7
+            fmul t2, t8, t15
+            fmul t3, t9, t15
+
+            # Apply rotational angular velocity
+            fadd t5, t2
+            fadd t6, t3
 
             str f32t, PLAYER.velx, t5
             str f32t, PLAYER.vely, t6
@@ -1688,7 +1858,6 @@ update_collisions:
 sbmk "Update Velocities"
 update_velocities:
     # Recalculate velocities relative to the player
-
     # s0..s1: Player x,y velocity
     vpsh s0..s1
 
@@ -1905,9 +2074,13 @@ check_player_input:
 
     @freecam:
         lod u8t, t0, editor_enabled
+        lod u8t, t1, current_menu_selection
+        cmp eq, t1, 0
+        and t0, cr
         lod u8t, cr, freecam_enabled
         orr cr, t0
         jfs @end+
+
         fctf t0, s0
         fctf t1, s1
         fmul a0, t0, FREECAM_SPEED
@@ -1927,11 +2100,11 @@ check_player_input:
     @end:
 
     @init_player:
-        lod u8t, cr, player_initialized
+        lod u8t, cr, player_move_initialized
         jtr @endif+
         cmp neq, s2, true # Player has to release a button to avoid it bleeding over from the menu
         jfs @end_input+
-        str u8t, player_initialized, true
+        str u8t, player_move_initialized, true
         jmp @end_input+
     @endif:
 
@@ -2198,6 +2371,68 @@ player_match_velocity:
     ret
 
 #-------------------------------------------------------------------------------
+sbmk "Freecam Input"
+freecam_input:
+    # Get input states
+    # s0: Right - Left
+    # s1: Down - Up
+
+    vpsh s0..s1
+
+    syscall SYS_GET_INPUT
+    and t0, a0, BTN_LEFT
+    cmp neq, t0, 0
+    mov t0, cr
+    and t1, a0, BTN_RIGHT
+    cmp neq, t1, 0
+    mov t1, cr
+    and t2, a0, BTN_UP
+    cmp neq, t2, 0
+    mov t2, cr
+    and t3, a0, BTN_DOWN
+    cmp neq, t3, 0
+    mov t3, cr
+    sub s0, t1, t0
+    sub s1, t3, t2
+
+    str u8t, PLAYER.is_flying, false
+    str i8t, control_camera_offset_scalar, 0
+    str f32t, PLAYER.movex, 0.0 # Reset movement
+    str f32t, PLAYER.movey, 0.0
+
+    @freecam:
+        lod u8t, t0, editor_enabled
+        lod u8t, t1, current_menu_selection
+        cmp eq, t1, 0
+        and t0, cr
+        lod u8t, cr, freecam_enabled
+        orr cr, t0
+        jfs @end+
+
+        fctf t0, s0
+        fctf t1, s1
+        fmul a0, t0, FREECAM_SPEED
+        fmul a1, t1, FREECAM_SPEED
+        lod f32t, t2, distance_scale
+        fmul a0,t2
+        fmul a1, t2
+        lod f32t, t2, dt
+        fmul a0, t2
+        fmul a1, t2
+        lod f32t, t0, freecam_pos_x
+        lod f32t, t1, freecam_pos_y
+        fadd a0, t0
+        fadd a1, t1
+        cal move_camera
+        jmp @end_input+
+    @end:
+
+    @end_input:
+
+    vpop s0..s1
+    ret
+
+#-------------------------------------------------------------------------------
 bmk "Physics"
 
 #-------------------------------------------------------------------------------
@@ -2314,7 +2549,11 @@ get_gravity_vector:
     fpow t2, t0, 2.0
     fpow t3, t1, 2.0
     fadd t2, t3 # r^2
-
+    cmp eq, t2, 0.0
+    mvc a0, 0.0
+    mvc a1, 0.0
+    mvc a2, 0.0
+    jtr @end+
     # Normal Vector
     fsqrt t3, t2 # r
     fdiv t0, t3 # dx/r
@@ -2331,6 +2570,7 @@ get_gravity_vector:
     fmul a1, t1, t3
     mov a2, t3
 
+    @end:
     ret
 
 #-------------------------------------------------------------------------------
@@ -2569,6 +2809,14 @@ draw_bodies:
             jfs @endif+
             fcti t0, a0
             fcti t1, a1
+            cmp gte, t0, 0
+            jfs @skipdraw+
+            cmp gte, t1, 0
+            jfs @skipdraw+
+            cmp lt, t0, SCREEN_WIDTH
+            jfs @skipdraw+
+            cmp lt, t1, SCREEN_HEIGHT
+            jfs @skipdraw+
             sbpx t0, t1, 255
             jmp @skipdraw+
         @endif:
@@ -2739,11 +2987,12 @@ draw_smoke:
 sbmk "Draw HUD"
 draw_hud:
     # Flags: -- Set to 0/false to not display
-    #   s0: Jump bar
-    #   s1: 1: Walk, 2: Cancel, 3: Match, 4: Player, 5: Global, 6: Remove Body
+    #   s0: 1: Jump, 2: Add Body, 3: Edit Body, 4: Next
+    #   s1: 1: Walk, 2: Cancel, 3: Match, 4: Player, 5: Global, 6: Remove Body, 7: Back
     #   s2: Zoom
     #   s3: 1: Freecam, 2: Editor
     #   s4: Cursor
+    #   s5: Editor State
 
     vpsh s0..s5
 
@@ -2770,13 +3019,26 @@ draw_hud:
     @if_editor_enabled:
         lod u8t, cr, editor_enabled
         jfs @else+
-        mov s0, false
-        mov s3, 2
-        mov s4, true
-        lod i8t, t0, selected_body_index
-        cmp gte, t0, 0
-        mvc s1, 6
-        jmp @endif+
+        @if_editing:
+            lod u8t, t0, current_menu_selection
+            cmp neq, t0, 0
+            jfs @else2+
+            mov s0, 4
+            mov s3, 2
+            mov s1, 7
+            mov s4, true
+            mov s5, t0
+            jmp @endif+
+        @else2:
+            mov s0, false
+            mov s3, 2
+            mov s4, true
+            lod i8t, t0, selected_body_index
+            cmp gte, t0, 0
+            mvc s1, 6
+            sel s0, 3, 2
+            jmp @endif+
+
     @else:
     @if_freecam_enabled:
         lod u8t, cr, freecam_enabled
@@ -2825,6 +3087,7 @@ draw_hud:
     @if_flag_enabled:
         mov cr, s1
         jfs @endif+
+
         mov a0, HUD_SPRITESHEET
         mov a1, LEFT_EDGE
         mov a2, BOTTOM_EDGE - 16
@@ -2846,6 +3109,8 @@ draw_hud:
         mvc a0, STRINGS.GLOBAL
         cmp eq, s1, 6
         mvc a0, STRINGS.REMOVE_BODY
+        cmp eq, s1, 7
+        mvc a0, STRINGS.BACK
         mov a1, LEFT_EDGE + 12
         mov a2, BOTTOM_EDGE - 16
         mov a4, 96
@@ -2868,103 +3133,122 @@ draw_hud:
     @if_flag_enabled:
         mov cr, s0
         jfs @endif+
-
-        mov a0, HUD_SPRITESHEET
-        mov a1, RIGHT_EDGE - 112
-        mov a2, BOTTOM_EDGE - 16
-        vmov a3..a4, 0
-        vmov a5..a6, 16
-        syscall SYS_DRAW_TEXTURE_REGION
-
-        mov a0, STRINGS.JUMP
-        mov a1, RIGHT_EDGE - 100
-        mov a2, BOTTOM_EDGE - 16
-        cal draw_string
-
-        # Jump charge bar
-
-        # Calculate charge bar fill amount
-        lod f32t, t0, PLAYER.jump_charge
-        fsub t0, PLAYER.MIN_JUMP_CHARGE
-        fsub t1, PLAYER.MAX_JUMP_CHARGE, PLAYER.MIN_JUMP_CHARGE
-        fdiv t0, t1
-        fctf t2, 8*CHARGE_BAR_LENGTH
-        fsub t2, 12.0
-        fmul t0, t2
-        frou t0
-        fcti t0
-
-        # Draw charge bar background
-        mov a0, CHARGE_BAR_X  + 4
-        mov a1, CHARGE_BAR_Y + 6
-        mov a2, 8
-        mov a3, 8*CHARGE_BAR_LENGTH-12
-        mov a4, 1
-        syscall SYS_DRAW_RECT
-
-        @if_charging:
-            cmp gt, t0, 0
-            jfs @endif2+
-            #sub t0, 6
-            sub a1, CHARGE_BAR_Y + 8*(CHARGE_BAR_LENGTH-1) + 2, t0
-            mov a3, t0
-            mov a4, 255
-            syscall SYS_DRAW_RECT
-        @endif2:
-
-        # Charge Bar top
-        mov a0, HUD_SPRITESHEET
-        mov a1, CHARGE_BAR_X
-        mov a2, CHARGE_BAR_Y
-        mov a3, 88
-        mov a4, 0
-        mov a5, 16
-        mov a6, 8
-        syscall SYS_DRAW_TEXTURE_REGION
-
-        # Charge Bar Middle
-        mov a4, 8
-        mov t0, zr
-        @loop:
-            mul t1, t0, 8
-            add a2, CHARGE_BAR_Y + 8, t1
+        @jump:
+            cmp eq, s0, 1
+            jfs @editor+
+            mov a0, HUD_SPRITESHEET
+            mov a1, RIGHT_EDGE - 112
+            mov a2, BOTTOM_EDGE - 16
+            vmov a3..a4, 0
+            vmov a5..a6, 16
             syscall SYS_DRAW_TEXTURE_REGION
-            inc t0
-            cmp lt, t0, CHARGE_BAR_LENGTH-2
-            jtr @loop-
 
-        # Charge Bar Bottom
-        mov a2, CHARGE_BAR_Y + 8*(CHARGE_BAR_LENGTH-1)
-        mov a4, 24
-        mov a5, 16
-        mov a6, 8
-        syscall SYS_DRAW_TEXTURE_REGION
+            mov a0, STRINGS.JUMP
+            mov a1, RIGHT_EDGE - 100
+            mov a2, BOTTOM_EDGE - 16
+            cal draw_string
+
+            # Jump charge bar
+
+            # Calculate charge bar fill amount
+            lod f32t, t0, PLAYER.jump_charge
+            fsub t0, PLAYER.MIN_JUMP_CHARGE
+            fsub t1, PLAYER.MAX_JUMP_CHARGE, PLAYER.MIN_JUMP_CHARGE
+            fdiv t0, t1
+            fctf t2, 8*CHARGE_BAR_LENGTH
+            fsub t2, 12.0
+            fmul t0, t2
+            frou t0
+            fcti t0
+
+            # Draw charge bar background
+            mov a0, CHARGE_BAR_X  + 4
+            mov a1, CHARGE_BAR_Y + 6
+            mov a2, 8
+            mov a3, 8*CHARGE_BAR_LENGTH-12
+            mov a4, 1
+            syscall SYS_DRAW_RECT
+
+            @if_charging:
+                cmp gt, t0, 0
+                jfs @endif2+
+                #sub t0, 6
+                sub a1, CHARGE_BAR_Y + 8*(CHARGE_BAR_LENGTH-1) + 2, t0
+                mov a3, t0
+                mov a4, 255
+                syscall SYS_DRAW_RECT
+            @endif2:
+
+            # Charge Bar top
+            mov a0, HUD_SPRITESHEET
+            mov a1, CHARGE_BAR_X
+            mov a2, CHARGE_BAR_Y
+            mov a3, 88
+            mov a4, 0
+            mov a5, 16
+            mov a6, 8
+            syscall SYS_DRAW_TEXTURE_REGION
+
+            # Charge Bar Middle
+            mov a4, 8
+            mov t0, zr
+            @loop:
+                mul t1, t0, 8
+                add a2, CHARGE_BAR_Y + 8, t1
+                syscall SYS_DRAW_TEXTURE_REGION
+                inc t0
+                cmp lt, t0, CHARGE_BAR_LENGTH-2
+                jtr @loop-
+
+            # Charge Bar Bottom
+            mov a2, CHARGE_BAR_Y + 8*(CHARGE_BAR_LENGTH-1)
+            mov a4, 24
+            mov a5, 16
+            mov a6, 8
+            syscall SYS_DRAW_TEXTURE_REGION
+            jmp @endif+
+
+        @editor:
+            mov a0, HUD_SPRITESHEET
+            mov a1, RIGHT_EDGE - 96
+            mov a2, BOTTOM_EDGE - 16
+            vmov a3..a4, 0
+            vmov a5..a6, 16
+            syscall SYS_DRAW_TEXTURE_REGION
+
+            cmp eq, s0, 2
+            sel a0, STRINGS.ADD_BODY, STRINGS.EDIT_BODY
+            cmp eq, s0, 4
+            mvc a0, STRINGS.NEXT
+            mov a1, RIGHT_EDGE - 80
+            mov a2, BOTTOM_EDGE - 16
+            cal draw_string
     @endif:
 
-    @if_paused:
-        lod u8t, cr, game_paused
-        jfs @endif+
-        mov a0, STRINGS.PAUSE
-        mov a1, SCREEN_WIDTH/2 - 88
-        mov a2, SCREEN_HEIGHT/2 - 32
-        cal draw_string
+    #@if_paused:
+        #lod u8t, cr, game_paused
+        #jfs @endif+
+        #mov a0, STRINGS.PAUSE
+        #mov a1, SCREEN_WIDTH/2 - 88
+        #mov a2, SCREEN_HEIGHT/2 - 32
+        #cal draw_string
 
-        # B button
-        mov a0, HUD_SPRITESHEET
-        mov a1, SCREEN_WIDTH/2 - 120
-        add a2, 24
-        mov a3, 0
-        mov a4, 16
-        vmov a5..a6, 16
-        mov a7, 0
-        syscall SYS_DRAW_TEXTURE_REGION
+        ## B button
+        #mov a0, HUD_SPRITESHEET
+        #mov a1, SCREEN_WIDTH/2 - 120
+        #add a2, 24
+        #mov a3, 0
+        #mov a4, 16
+        #vmov a5..a6, 16
+        #mov a7, 0
+        #syscall SYS_DRAW_TEXTURE_REGION
 
-        # Editor toggle text
-        mov a0, STRINGS.TOGGLE_EDITOR
-        add a1, 16
-        cal draw_string
+        ## Editor toggle text
+        #mov a0, STRINGS.TOGGLE_EDITOR
+        #add a1, 16
+        #cal draw_string
 
-    @endif:
+    #@endif:
 
     @cursor:
         mov cr, s4
@@ -3045,6 +3329,7 @@ sbmk "Draw String"
 draw_string:
     # > a0*: String address
     # > a1..a2: Draw position
+    # < a0: String size
 
     vpsh s0..s2
     vmov s0..s2, a0..
@@ -3056,6 +3341,9 @@ draw_string:
         lod u8t, t0, s0
         cmp eq, t0, 0
         jtr @endloop+
+        cmp eq, t0, NEWLINE
+        mvc a1, SCREEN_WIDTH
+        jtr @skipdraw+
         cmp gt, t0, 96 # if lowercase, convert to uppercase
         sel t1, 64, 32
         sub t0, t1
@@ -3065,6 +3353,7 @@ draw_string:
         mul a4, 16
         syscall SYS_DRAW_TEXTURE_REGION
         add a1, 16
+        @skipdraw:
         inc s0
         cmp lt, a1, SCREEN_WIDTH
         jtr @loop-
@@ -3073,6 +3362,77 @@ draw_string:
         jmp @loop-
     @endloop:
     vpop a0..a7
+    mov a0, s0
+    vpop s0..s2
+    ret
+
+#-------------------------------------------------------------------------------
+sbmk "Draw Menu"
+draw_menu:
+    vpsh s0..s2
+    lod u8t, s0, current_active_menu_index
+    lod u8t, s2, current_menu_selection
+
+    cmp eq, s0, 0
+    jtr @skipdraw+
+
+    cea menus, 1, MENU.SIZE
+    lde u16t, a1, MENU.X
+    lde u16t, a2, MENU.Y
+    lde u32t, a0, MENU.NAME
+    lde u32t, s1, MENU.OPTION_NAMES
+
+    cal draw_string
+
+    add a1, 16
+    add a2, 16
+    mov a0, s1
+    cal draw_string
+
+    mov a0, HUD_SPRITESHEET
+    sub a1, 16
+    fma a2, s2, 16, a2
+    mov a3, 48
+    mov a4, 0
+    vmov a5..a6, 16
+    mov a7, 0
+    syscall SYS_DRAW_TEXTURE_REGION
+
+
+    #lod u16t, a1, t0 # Menu pos X
+    #add s0, 2
+
+    #lod u16t, a2, s0 # Menu pos y
+    #add s0, 2
+
+    #mov a0, s0
+    #cal draw_string
+    #add s0, a0
+
+    #lod u8t, s1, s0 # Option count
+    #add s0, 1
+
+    #str u32t, current_menu_options, s0
+
+    #fma t0, s1, 4, s2
+    #lod u8t, a0, t0 # Option names address
+
+    #add a1, 16
+    #cal draw_string
+
+    #lod u8t, t0, current_menu_selection
+
+    #mov a0, HUD_SPRITESHEET
+
+    #fma t0, 16, a2
+    #add a2, t0, 16
+    #mov a3, 48
+    #mov a4, 0
+    #vmov a5..a6, 16
+    #mov a7, 0
+    #syscall SYS_DRAW_TEXTURE_REGION
+
+    @skipdraw:
     vpop s0..s2
     ret
 
@@ -3088,6 +3448,11 @@ move_camera:
     mov t15, zr # Object counter
     mov t13, zr
     lod u8t, t14, system_bodies_count
+    cmp eq, a0, 0.0
+    mov t0, cr
+    cmp eq, a1, 0.0
+    and cr, t0
+    jtr @end_move+
     @loop:
         cmp lt, t15, MAX_BODIES
         jfs @endloop+
@@ -3151,6 +3516,8 @@ move_camera:
     str f32t, bg_offset_x, t0
     str f32t, bg_offset_y, t1
 
+    @end_move:
+
     ret
 
 #-------------------------------------------------------------------------------
@@ -3159,6 +3526,7 @@ center_camera:
     # > a0: Lerp (true) or Snap (false)
     # s0: distance_scale
     # s1: Lerp or snap
+
     vpsh s0..s1
     mov s1, a0
     lod f32t, a0, PLAYER.x
@@ -3237,6 +3605,96 @@ set_distance_scale:
 
 #-------------------------------------------------------------------------------
 bmk "Editor"
+
+#-------------------------------------------------------------------------------
+sbmk "Handle Editor Input"
+check_editor_input:
+    # > a0: Input Bitmask
+    # > a1: BTN_RIGHT - BTN_LEFT input
+    # > a2: BTN_DOWN - BTN_UP input
+    # > a3: BTN_A input
+    # > a4: BTN_B input
+    # > a5: BTN_X input
+    # > a6: BTN_Y input
+    # > a7: BTN_START input
+    # > a8: BTN_SELECT input
+
+    vpsh s0..s1
+
+    lod u8t, s0, selected_body_index
+    lod u8t, s1, current_menu_selection
+
+    mov cr, s0
+    jfs @end_input+ # Nothing to do if no body is selected
+
+    @if_editing_planet:
+        mov cr, s1
+        jfs @else+
+
+        cmp eq, s1, 1
+        jtr @edit_pos+
+        cmp eq, s1, 2
+        jtr @edit_velocity+
+        cmp eq, s1, 3
+        jtr @edit_rotation+
+        cmp eq, s1, 4
+        jtr @edit_mass+
+        cmp eq, s1, 5
+        jtr @edit_luminosity+
+        str u8t, selected_body_index, 0
+        jmp @end+
+
+        @edit_pos:
+            jmp @end+
+        @edit_velocity:
+            jmp @end+
+        @edit_rotation:
+            jmp @end+
+        @edit_mass:
+            jmp @end+
+        @edit_luminosity:
+
+        @end:
+
+        sub t0, a3, a4
+        add s1, t0
+        str u8t, current_menu_selection, s1
+
+        jmp @end_input+
+    @else:
+        @add_body:
+            mov cr, a3
+            jfs @end+
+            vpsh a0..a8
+            vmov a0..a4, 0.0
+            mov a5, 5.0
+            lod f32t, t0, distance_scale
+            fmul a5, t0
+            mov a6, 1.0
+            mov a7, 255/2
+            cal add_body
+            vpop a0..a8
+            str u8t, current_menu_selection, 1
+            jmp @end_input+
+        @end:
+
+        @remove_body:
+            mov cr, a4
+            jfs @end+
+            @if_body_selected:
+                lod i8t, t0, selected_body_index
+                cmp gte, t0, 0
+                jfs @endif+
+                mov t1, a0
+                mov a0, t0
+                cal remove_body
+                mov a0, t1
+            @endif:
+        @end:
+
+    @end_input:
+    vpop s0..s1
+    ret
 
 #-------------------------------------------------------------------------------
 sbmk "Update Selected Body"
@@ -3581,9 +4039,18 @@ normal_vector:
     fpow s1, a1, 2.0
     fadd s0, s1 # r^2
     fsqrt a2, s0 # r
+    @if_distance_zero:
+        cmp eq, a2, 0
+        jfs @endif+
+        mov a0, 1.0
+        mov a1, 0.0
+        mov a2, 0
+        jmp @end+
+    @endif:
     fdiv a0, a2 # dx/r
     fdiv a1, a2 # dy/r
 
+    @end:
     vpop s0..s1
     ret
 
