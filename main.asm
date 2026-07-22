@@ -57,7 +57,7 @@ def GROUNDED_PLAYER_COLLISION_MARGIN 2.0
 #-------------------------------------------------------------------------------
 sbmk "Simulation Settings"
 
-def TIME_SCALE 1.0 # How fast the simulation runs. Must be greater than 0 or things dont work
+def TIME_SCALE 5.0 # How fast the simulation runs. Must be greater than 0 or things dont work
 
 #-------------------------------------------------------------------------------
 sbmk "Visualization Settings"
@@ -130,16 +130,18 @@ STRINGS:
     .REMOVE_BODY: emb string ":REMOVE"
     .NEXT: emb string ":NEXT"
     .BACK: emb string ":BACK"
-    .POS: emb string "POS:"
     .X: emb string "X:"
     .Y: emb string "Y:"
-    .VEL: emb string "VELOCITY:"
-    .ROT: emb string "ROTATION:"
-    .R: emb string "RADIUS:"
-    .M: emb string "MASS:"
+    .VAL: emb string "VAL:"
+    .SCALE: emb string "SCALE:"
+    .POS: emb string "POS(KM):"
+    .VEL: emb string "VELOCITY(KM/S):"
+    .ROT: emb string "ROTATION(RAD/S):"
+    .R: emb string "RADIUS(KM):"
+    .M: emb string "MASS(KG):"
     .LUM: emb string "LUMINOSITY:"
     .BODY_ID: emb string "ID:"
-    
+
 
     # Errors
     .ERR_INVALID_SYSTEM_ID: emb string "ERROR: INVALID SYSTEM ID"
@@ -316,14 +318,16 @@ freecam_pos_x: emb f32t 0.0
 freecam_pos_y: emb f32t 0.0
 control_camera_offset_scalar: emb i8t 0 # -1, 1, or 1, used for controlling the camera with up and down
 
-input_value_x_f: emb f32t 0.0
-input_value_y_f: emb f32t 0.0
-input_value_x: emb i32t 0
-input_value_y: emb i32t 0
+visible_editor_value_x: emb u16t 0
+visible_editor_value_y: emb u16t 0
+visible_editor_value_x_f: emb f32t 0.0
+visible_editor_value_y_f: emb f32t 0.0
+visible_editor_value_scale: emb i8t 0
 
 selected_body_index: emb i8t -1 # index of planet the cursor is on. -1 for none selected
 
 # Flags
+debounce_check: emb u8t false # Only allow new inputs when none are held
 player_move_initialized: emb u8t false
 game_paused: emb u8t false # Used for pausing the game
 smoke_can_spawn: emb u8t false
@@ -345,45 +349,75 @@ _start: # Runs once when the VM starts.
 
     cal load_menus
 
-    mov a0, -34000.0 # X
-    mov a1, 0.0 # Y
-    mov a2, 0.0 # VELOCITY X
+    mov a0, 0.0 # X
+    mov a1, 200.0 # Y
+    mov a2, 50.0 # VELOCITY X
     mov a3, 0.0 # VELOCITY Y
-    mov a4, 0.000003 # ROTATIONAL ANGULAR VELOCITY
-    mov a5, 20000.0 # RADIUS
-    mov a6, 20000000000.0 # MASS
+    mov a4, 0.0 # ROTATIONAL ANGULAR VELOCITY
+    mov a5, 100.0 # RADIUS
+    mov a6, 2000000.0 # MASS
     mov a7, 50000 # LUMINOSITY
     cal add_body
 
     mov a0, 0.0 # X
-    mov a1, 0.0 # Y
-    mov a2, 0.0 # VELOCITY X
-    mov a3, 766.96 # VELOCITY Y
-    mov a4, 2*PI/600 # ROTATIONAL ANGLUAR VELOCITY
-    mov a5, 250.0 # RADIUS
-    mov a6, 8000000.0 # MASS
-    mov a7, 200 # LUMINOSITY
-    cal add_body
-
-    mov a0, -350.0 # X
-    mov a1, 0.0 # Y
-    mov a2, 0.0 # VELOCITY X
-    mov a3, 766.96 - 151.19 # VELOCITY Y
-    mov a4, 2*PI/5 # ROTATIONAL ANGULAR VELOCITY
-    mov a5, 10.0 # RADIUS
-    mov a6, 50000.0 # MASS
-    mov a7, 150 # LUMINOSITY
-    cal add_body
-
-    mov a0, -5000.0 # X
-    mov a1, 0.0 # Y
-    mov a2, 0.0 # VELOCITY X
-    mov a3, 830.45 # VELOCITY Y
-    mov a4, PI/10 # ROTATIONAL ANGULAR VELOCITY
+    mov a1, -200.0 # Y
+    mov a2, -50.0 # VELOCITY X
+    mov a3, 0.0 # VELOCITY Y
+    mov a4, 0.0 # ROTATIONAL ANGULAR VELOCITY
     mov a5, 100.0 # RADIUS
-    mov a6, 6500000.0 # MASS --- This one is tricky to take off from, but it's possible!
-    mov a7, 200 # LUMINOSITY
+    mov a6, 2000000.0 # MASS
+    mov a7, 50000 # LUMINOSITY
     cal add_body
+
+    mov a0, 1000.0 # X
+    mov a1, 0.0 # Y
+    mov a2, 0.0 # VELOCITY X
+    mov a3, 63.245 # VELOCITY Y
+    mov a4, 0.0 # ROTATIONAL ANGULAR VELOCITY
+    mov a5, 50.0 # RADIUS
+    mov a6, 50000.0 # MASS
+    mov a7, 50000 # LUMINOSITY
+    cal add_body
+
+    #mov a0, -34000.0 # X
+    #mov a1, 0.0 # Y
+    #mov a2, 0.0 # VELOCITY X
+    #mov a3, 0.0 # VELOCITY Y
+    #mov a4, 0.000003 # ROTATIONAL ANGULAR VELOCITY
+    #mov a5, 20000.0 # RADIUS
+    #mov a6, 20000000000.0 # MASS
+    #mov a7, 50000 # LUMINOSITY
+    #cal add_body
+
+    #mov a0, 0.0 # X
+    #mov a1, 0.0 # Y
+    #mov a2, 0.0 # VELOCITY X
+    #mov a3, 766.96 # VELOCITY Y
+    #mov a4, 2*PI/600 # ROTATIONAL ANGLUAR VELOCITY
+    #mov a5, 250.0 # RADIUS
+    #mov a6, 8000000.0 # MASS
+    #mov a7, 200 # LUMINOSITY
+    #cal add_body
+
+    #mov a0, -350.0 # X
+    #mov a1, 0.0 # Y
+    #mov a2, 0.0 # VELOCITY X
+    #mov a3, 766.96 - 151.19 # VELOCITY Y
+    #mov a4, 2*PI/5 # ROTATIONAL ANGULAR VELOCITY
+    #mov a5, 10.0 # RADIUS
+    #mov a6, 50000.0 # MASS
+    #mov a7, 150 # LUMINOSITY
+    #cal add_body
+
+    #mov a0, -5000.0 # X
+    #mov a1, 0.0 # Y
+    #mov a2, 0.0 # VELOCITY X
+    #mov a3, 830.45 # VELOCITY Y
+    #mov a4, PI/10 # ROTATIONAL ANGULAR VELOCITY
+    #mov a5, 100.0 # RADIUS
+    #mov a6, 6500000.0 # MASS --- This one is tricky to take off from, but it's possible!
+    #mov a7, 200 # LUMINOSITY
+    #cal add_body
 
     mov a0, 0
     cal save_system
@@ -440,8 +474,14 @@ _update: # Runs at 60 Hz.
         cal game_screen_update
         jmp @exit_update+
     @else:
-    @exit_update:
 
+    @exit_update:
+    syscall SYS_GET_INPUT
+    cmp eq, a0, 0
+    jfs @end+
+    str u8t, debounce_check, false
+
+    @end:
     exit
 
 #-------------------------------------------------------------------------------
@@ -543,6 +583,7 @@ _input: # Runs when input state changes.
         cal game_screen_input
         jmp @exit_input+
     @else:
+    str u8t, debounce_check, true
 
     @exit_input:
     exit
@@ -728,13 +769,13 @@ main_menu_input:
         jfs @endif+
 
         # Menu options
-        @load_system:
+        @new_system:
             cmp eq, s0, 0
             jfs @else+
             cal game_screen_start
             jmp @endif+
         @else:
-        @edit_system:
+        @load_system:
             cmp eq, s0, 1
             jfs @else+
         @else:
@@ -843,6 +884,15 @@ game_screen_input:
 
     vpsh s0..s4
 
+    @debounce_check:
+        lod u8t, cr, debounce_check
+        jfs @end+
+        orr t0, INPUT.ZOOM_IN, INPUT.ZOOM_OUT
+        and a0, t0
+        vmov a1..a7, 0
+        #jmp @end_input+
+    @end:
+
     # Zoom in
     and t0, a0, INPUT.ZOOM_IN
     cmp neq, t0, 0
@@ -873,11 +923,11 @@ game_screen_input:
     @zoom:
         cmp neq, s0, 0
         jfs @end+
-        lod u8t, t0, editor_enabled
-        lod u8t, t1, current_menu_selection
-        cmp neq, t1, 0
-        and cr, t0
-        jtr @end+
+        #lod u8t, t0, editor_enabled
+        #lod u8t, t1, current_menu_selection
+        #cmp neq, t1, 0
+        #and cr, t0
+        #jtr @end+
 
 
         #fmul s0, ZOOM_STEP
@@ -892,7 +942,16 @@ game_screen_input:
         mov a0, t2
         str i8t, zoom_value, t1
         cal set_distance_scale
+        str u8t, debounce_check, true
     @end:
+
+    @editor_enabled:
+        lod u8t, cr, editor_enabled
+        jfs @endif+
+        cal check_editor_input
+        str u8t, debounce_check, true
+        jmp @end_input+
+    @endif:
 
     @toggle_pause:
         mov cr, s2
@@ -903,6 +962,8 @@ game_screen_input:
         sel t0, MENUS.NO_MENU, MENUS.PAUSE_MENU
         str u8t, current_active_menu_index, t0
         str u8t, current_menu_selection, 0
+        str u8t, debounce_check, true
+        jmp @end_input+
     @end:
 
     @if_menu_active:
@@ -923,17 +984,7 @@ game_screen_input:
 
         cala t4
         str u8t, player_move_initialized, false
-        jmp @end_input+
-    @endif:
-
-
-
-
-
-    @editor_enabled:
-        lod u8t, cr, editor_enabled
-        jfs @endif+
-        cal check_editor_input
+        str u8t, debounce_check, true
         jmp @end_input+
     @endif:
 
@@ -948,6 +999,8 @@ game_screen_input:
         jtr @end+
         mov a0, false
         cal center_camera # Center back on player if freecam is disabled
+        str u8t, debounce_check, true
+        jmp @end_input+
     @end:
 
     @toggle_relative_velocity: # Toggles freecam between player relative velocity and global velocity
@@ -960,6 +1013,7 @@ game_screen_input:
         lod u8t, t0, freecam_relative_velocity_enabled
         cmp eq, t0, false
         str u8t, freecam_relative_velocity_enabled, cr
+        str u8t, debounce_check, true
     @end:
 
     @end_input:
@@ -987,7 +1041,7 @@ PAUSE_MENU:
         lod u8t, t0, editor_enabled
         cmp eq, t0, false
         str u8t, editor_enabled, cr
-        str u8t, freecam_relative_velocity_enabled, cr
+        #str u8t, freecam_relative_velocity_enabled, cr
         str u8t, game_paused, false
         str u8t, current_active_menu_index, 0
         @end:
@@ -1224,6 +1278,26 @@ load_menus:
     ret
 
 #-------------------------------------------------------------------------------
+sbmk "Load String to Buffer"
+load_string:
+    # > a0*: String address
+    # < a0: String size
+
+    mov t0, a0
+    mov a0, zr
+    @loop:
+        add t1, t0, a0
+        add t2, buffer, a0
+        lod u8t, t3, t1
+        str u8t, t2, t3
+        cmp eq, t3, 0
+        jtr @endloop+
+        inc a0
+        jmp @loop-
+    @endloop:
+    ret
+
+#-------------------------------------------------------------------------------
 bmk "Spawning"
 
 #-------------------------------------------------------------------------------
@@ -1235,6 +1309,7 @@ add_body:
     # > (f32t) a5: radius
     # > (f32t) a6: mass
     # > (u8t)  a7: luma
+    # < a0: Body index
 
     # Step by step instructions to add a new planet or moon with a stable circular orbit:
     #   1. Define P (Parent position), Vp (Parent velocity), M (Parent mass),
@@ -1290,7 +1365,8 @@ add_body:
     inc s0
     str u8t, system_bodies_count, s0
 
-    #cal update_collisions # Update collisions to fix overlapping positions
+    mov a0, t0
+
     @end:
     pop s0
     ret
@@ -2830,7 +2906,7 @@ draw_bodies:
             jmp @skipdraw+
         @endif:
 
-        lod u8t, t0, selected_body_index
+        lod i8t, t0, selected_body_index
         cmp eq, s0, t0
         mvc a3, 255 # Selected body has full luma
         vpsh a0..a4
@@ -3037,6 +3113,7 @@ draw_hud:
             mov s3, 2
             mov s1, 7
             mov s4, true
+            add t0, 1
             mov s5, t0
             jmp @endif+
         @else2:
@@ -3221,6 +3298,21 @@ draw_hud:
 
         @editor:
             mov a0, HUD_SPRITESHEET
+            mov a1, RIGHT_EDGE - 128
+            mov a2, TOP_EDGE + 16
+            mov a3, 32
+            mov a4, 16
+            vmov a5..a6, 16
+            mov a7, 0
+            syscall SYS_DRAW_TEXTURE_REGION
+
+            lod u8t, cr, freecam_relative_velocity_enabled
+            sel a0, STRINGS.PLAYER, STRINGS.GLOBAL
+            mov a1, RIGHT_EDGE - 112
+            mov a2, TOP_EDGE + 16
+            cal draw_string
+
+            mov a0, HUD_SPRITESHEET
             mov a1, RIGHT_EDGE - 96
             mov a2, BOTTOM_EDGE - 16
             vmov a3..a4, 0
@@ -3236,31 +3328,6 @@ draw_hud:
             cal draw_string
     @endif:
 
-    #@if_paused:
-        #lod u8t, cr, game_paused
-        #jfs @endif+
-        #mov a0, STRINGS.PAUSE
-        #mov a1, SCREEN_WIDTH/2 - 88
-        #mov a2, SCREEN_HEIGHT/2 - 32
-        #cal draw_string
-
-        ## B button
-        #mov a0, HUD_SPRITESHEET
-        #mov a1, SCREEN_WIDTH/2 - 120
-        #add a2, 24
-        #mov a3, 0
-        #mov a4, 16
-        #vmov a5..a6, 16
-        #mov a7, 0
-        #syscall SYS_DRAW_TEXTURE_REGION
-
-        ## Editor toggle text
-        #mov a0, STRINGS.TOGGLE_EDITOR
-        #add a1, 16
-        #cal draw_string
-
-    #@endif:
-
     @cursor:
         mov cr, s4
         jfs @end+
@@ -3275,32 +3342,136 @@ draw_hud:
         syscall SYS_DRAW_TEXTURE_REGION
     @end:
 
-    @editor:
+    @editor_active:
         cmp neq, s5, 0 # if body is selected
         jfs @end+
-        mov a0, STRINGS.BODY_ID
-        cmp eq, s5, 2
-        mvc a0, STRINGS.POSITION
-        cmp eq, s5, 3
-        mvc a0, STRINGS.VEL
-        cmp eq, s5, 4
-        mvc a0, STRINGS.ROT
-        cmp eq, s5, 5
-        mvc a0, STRINGS.R
-        cmp eq, s5, 6
-        mvc a0, STRINGS.M
-        cmp eq, s5, 7
-        mvc a0, STRINGS.LUM
-        cal load_string
 
-        add a0, buffer
-        lod u8t, a1, selected_body_index
-        cal int_to_ascii
+        @if_editing:
+            cmp gte, s5, 2
+            jfs @else+
 
-        mov a0, buffer
-        mov a1, LEFT_EDGE
-        mov a2, TOP_EDGE + 56
-        cal draw_string
+            mov a0, STRINGS.POS
+            cmp eq, s5, 3
+            mvc a0, STRINGS.VEL
+            cmp eq, s5, 4
+            mvc a0, STRINGS.ROT
+            cmp eq, s5, 5
+            mvc a0, STRINGS.R
+            cmp eq, s5, 6
+            mvc a0, STRINGS.M
+            cmp eq, s5, 7
+            mvc a0, STRINGS.LUM
+
+            mov a1, LEFT_EDGE
+            mov a2, TOP_EDGE + 56
+            cal draw_string
+
+            mov a1, LEFT_EDGE
+            mov a2, TOP_EDGE + 72
+            mov a0, STRINGS.X
+            cmp gt, s5, 3
+            mvc a0, STRINGS.VAL
+            cal draw_string
+
+
+
+            lod f32t, t0, visible_editor_value_x_f
+            lod u16t, t3, visible_editor_value_x
+
+            mov a0, buffer
+            @if_float:
+                cmp neq, s5, 7
+                jfs @else2+
+                mov a1, t0
+                mov a2, 2
+                cal float_to_ascii
+                jmp @endif2+
+            @else2:
+                mov a1, t3
+                cal int_to_ascii
+            @endif2:
+            mov a0, buffer
+            mov a1, LEFT_EDGE + 32
+            mov a2, TOP_EDGE + 72
+            cmp gt, s5, 3
+            mvc a1, LEFT_EDGE + 64
+            cal draw_string
+
+            mov a1, LEFT_EDGE
+            mov a2, TOP_EDGE + 88
+            mov a0, STRINGS.Y
+            cmp gt, s5, 3
+            mvc a0, STRINGS.SCALE
+            cal draw_string
+
+            lod f32t, t1, visible_editor_value_y_f
+            lod i8t, t2, visible_editor_value_scale
+            fctf t2
+            fpow t2, 10.0, t2
+
+            mov a0, buffer
+            cmp gt, s5, 3
+            sel a1, t2, t1
+            mov a2, 2
+            cal float_to_ascii
+
+            mov a0, buffer
+            mov a1, LEFT_EDGE + 32
+            mov a2, TOP_EDGE + 88
+            cmp gt, s5, 3
+            mvc a1, LEFT_EDGE + 96
+            cal draw_string
+
+            lod f32t, t0, visible_editor_value_x_f
+            lod f32t, t1, visible_editor_value_y_f
+
+            @if_position:
+                cmp eq, s5, 2
+                jfs @else2+
+                lod f32t, t8, distance_scale
+                mov a0, fcast SCREEN_WIDTH/2
+                mov a1, fcast SCREEN_HEIGHT/2
+                fdiv t0, t8
+                fadd a2, t0, a0
+                lod f32t, a3, visible_editor_value_y_f
+                fdiv t1, t8
+                fadd a3, t1, a1
+                mov a4, 255
+                cal draw_line
+                jmp @endif2+
+            @else2:
+            @if_velocity:
+                cmp eq, s5, 3
+                jfs @endif2+
+                lod u8t, t3, selected_body_index
+                lod f32t, t8, distance_scale
+                cea system_bodies, t3, BODY.SIZE
+                lde f32t, t4, BODY.X
+                lde f32t, t5, BODY.Y
+                fdiv t4, t8
+                fdiv t5, t8
+                fadd a0, t4, fcast SCREEN_WIDTH/2
+                fadd a1, t5, fcast SCREEN_HEIGHT/2
+                fdiv t0, t8
+                fdiv t1, t8
+                fadd a2, a0, t0
+                fadd a3, a1, t1
+                mov a4, 255
+                cal draw_line
+            @endif2:
+
+            jmp @endif+
+        @else:
+            mov a0, STRINGS.BODY_ID
+            cal load_string
+            add a0, buffer
+            lod i8t, a1, selected_body_index
+            cal int_to_ascii
+            mov a0, buffer
+            mov a1, LEFT_EDGE
+            mov a2, TOP_EDGE + 56
+            cal draw_string
+        @endif:
     @end:
 
     # Zoom bar
@@ -3342,6 +3513,31 @@ draw_hud:
     mov a3, 120
     mov a7, 0
     syscall SYS_DRAW_TEXTURE_REGION
+
+     #@if_paused:
+        #lod u8t, cr, game_paused
+        #jfs @endif+
+        #mov a0, STRINGS.PAUSE
+        #mov a1, SCREEN_WIDTH/2 - 88
+        #mov a2, SCREEN_HEIGHT/2 - 32
+        #cal draw_string
+
+        ## B button
+        #mov a0, HUD_SPRITESHEET
+        #mov a1, SCREEN_WIDTH/2 - 120
+        #add a2, 24
+        #mov a3, 0
+        #mov a4, 16
+        #vmov a5..a6, 16
+        #mov a7, 0
+        #syscall SYS_DRAW_TEXTURE_REGION
+
+        ## Editor toggle text
+        #mov a0, STRINGS.TOGGLE_EDITOR
+        #add a1, 16
+        #cal draw_string
+
+    #@endif:
 
     vpop s0..s5
     ret
@@ -3641,10 +3837,31 @@ check_editor_input:
     # > a7: BTN_START input
     # > a8: BTN_SELECT input
 
-    vpsh s0..s1
+    vpsh s0..s3
 
-    lod u8t, s0, selected_body_index
+    lod i8t, s0, selected_body_index
     lod u8t, s1, current_menu_selection
+    lod f32t, s2, distance_scale
+    lod i8t, s3, visible_editor_value_scale
+
+    @toggle_relative_velocity: # Toggles freecam between player relative velocity and global velocity
+        mov cr, a8
+        jfs @end+
+        lod u8t, t0, freecam_relative_velocity_enabled
+        cmp eq, t0, false
+        str u8t, freecam_relative_velocity_enabled, cr
+        str u8t, debounce_check, true
+    @end:
+
+    @close_editor:
+        mov cr, a7
+        jfs @end+
+        str u8t, editor_enabled, false
+        #str u8t, freecam_relative_velocity_enabled, cr
+        str u8t, current_active_menu_index, 0
+        str u8t, current_menu_selection, 0
+    @end:
+
 
     mov cr, s0
     jfs @end_input+ # Nothing to do if no body is selected
@@ -3653,6 +3870,13 @@ check_editor_input:
         mov cr, s1
         jfs @else+
 
+
+        sub t0, a3, a4
+        add s1, t0
+        str u8t, current_menu_selection, s1
+
+        cea system_bodies, s0, BODY.SIZE
+
         cmp eq, s1, 1
         jtr @edit_pos+
         cmp eq, s1, 2
@@ -3660,44 +3884,152 @@ check_editor_input:
         cmp eq, s1, 3
         jtr @edit_rotation+
         cmp eq, s1, 4
-        jtr @edit_mass+
+        jtr @edit_radius+
         cmp eq, s1, 5
+        jtr @edit_mass+
+        cmp eq, s1, 6
         jtr @edit_luminosity+
-        str u8t, selected_body_index, 0
-        jmp @end+
+        str u8t, current_menu_selection, 0
+        str f32t, visible_editor_value_x_f, 0.0
+        str f32t, visible_editor_value_y_f, 0.0
+        str u8t, visible_editor_value_x, 0
+        str u8t, visible_editor_value_y, 0
+        str i8t, visible_editor_value_scale, 0
+        jmp @end_input+
 
         @edit_pos:
+            fctf t1, a1
+            fctf t2, a2
+            fmul t1, s2
+            fmul t2, s2
+            lde f32t, t3, BODY.X
+            lde f32t, t4, BODY.Y
+            fadd t3, t1
+            fadd t4, t2
+            ste f32t, BODY.X, t3
+            ste f32t, BODY.Y, t4
+            str f32t, visible_editor_value_x_f, t3
+            str f32t, visible_editor_value_y_f, t4
             jmp @end+
         @edit_velocity:
+            fctf t1, a1
+            fctf t2, a2
+            fmul t1, s2
+            fmul t2, s2
+            lde f32t, t3, BODY.VX
+            lde f32t, t4, BODY.VY
+            fadd t3, t1
+            fadd t4, t2
+            ste f32t, BODY.VX, t3
+            ste f32t, BODY.VY, t4
+            lod u8t, cr, freecam_relative_velocity_enabled
+            lod f32t, t5, global_velx
+            lod f32t, t6, global_vely
+            sel t5, 0.0, t5
+            sel t6, 0.0, t6
+            fadd t3, t5
+            fadd t4, t6
+            str f32t, visible_editor_value_x_f, t3
+            str f32t, visible_editor_value_y_f, t4
             jmp @end+
         @edit_rotation:
+            fctf t1, a1
+            sub t2, s3, a2
+            fctf t3, t2
+            fpow t3, 10.0, t3
+            fmul t1, t3
+            lde f32t, t3, BODY.ROT_AV
+            fadd t3, t1
+            ste f32t, BODY.ROT_AV, t3
+            str f32t, visible_editor_value_x_f, t3
+            str i8t, visible_editor_value_scale, t2
+            jmp @end+
+        @edit_radius:
+            fctf t1, a1
+            sub t2, s3, a2
+            fctf t3, t2
+            fpow t3, 10.0, t3
+            fmul t1, t3
+            lde f32t, t3, BODY.R
+            fadd t3, t1
+            fmax t3, 0.1
+            ste f32t, BODY.R, t3
+            str f32t, visible_editor_value_x_f, t3
+            str i8t, visible_editor_value_scale, t2
             jmp @end+
         @edit_mass:
+            fctf t1, a1
+            sub t2, s3, a2
+            fctf t3, t2
+            fpow t3, 10.0, t3
+            fmul t1, t3
+            lde f32t, t3, BODY.M
+            fadd t3, t1
+            fmax t3, 0.01
+            ste f32t, BODY.M, t3
+            str f32t, visible_editor_value_x_f, t3
+            str i8t, visible_editor_value_scale, t2
             jmp @end+
         @edit_luminosity:
+            mov t1, a1
+            sub t2, s3, a2
+            pow t3, 10, t2
+            mul t1, t3
+            lde u16t, t3, BODY.LUM
+            neg t4, t3
+            max t1, t4
+            add t3, t1
+            fmax t3, 1
+            ste u16t, BODY.LUM, t3
+            str u16t, visible_editor_value_x, t3
+            str i8t, visible_editor_value_scale, t2
 
         @end:
 
-        sub t0, a3, a4
-        add s1, t0
-        str u8t, current_menu_selection, s1
-
         jmp @end_input+
     @else:
+        str f32t, visible_editor_value_x_f, 0.0
+        str f32t, visible_editor_value_y_f, 0.0
+        str u8t, visible_editor_value_x, 0
+        str u8t, visible_editor_value_y, 0
+        str i8t, visible_editor_value_scale, 0
+        @edit_planet:
+            cmp gte, s0, 0
+            jfs @end+
+            mov cr, a3
+            jfs @end+
+            str u8t, current_menu_selection, 1
+            vpsh a0..a1
+            cea system_bodies, s0, BODY.SIZE
+            lde f32t, a0, BODY.X
+            lde f32t, a1, BODY.Y
+            cal move_camera
+            vpop a0..a1
+            jmp @end_input+
+        @end:
         @add_body:
             mov cr, a3
             jfs @end+
             vpsh a0..a8
-            vmov a0..a4, 0.0
+            vmov a0..a1, 0.0
+            lod u8t, cr, freecam_relative_velocity_enabled
+            lod f32t, a2, global_velx
+            lod f32t, a3, global_vely
+            fneg a2
+            fneg a3
+            sel a2, 0.0, a2
+            sel a3, 0.0, a3
+            mov a4, 0.0
             mov a5, 5.0
             lod f32t, t0, distance_scale
             fmul a5, t0
             mov a6, 1.0
             mov a7, 255/2
             cal add_body
+            str i8t, selected_body_index, a0
+            mov s0, a0
             vpop a0..a8
-            str u8t, current_menu_selection, 1
-            jmp @end_input+
+            jmp @edit_planet-
         @end:
 
         @remove_body:
@@ -3715,7 +4047,7 @@ check_editor_input:
         @end:
 
     @end_input:
-    vpop s0..s1
+    vpop s0..s3
     ret
 
 #-------------------------------------------------------------------------------
@@ -3723,6 +4055,10 @@ sbmk "Update Selected Body"
 update_selected_body:
     psh s0 # Distance scale
 
+
+    lod u8t, t0, current_menu_selection
+    cmp eq, t0, 0
+    jfs @end+
     lod f32t, s0, distance_scale
     str i8t, selected_body_index, -1
 
@@ -3822,7 +4158,7 @@ get_digit_int:
     add t2, a1, 1
     pow t2, 10, t2
 
-    mod a0, t2 # Isolate previous digit
+    rem a0, t2 # Isolate previous digit
     div a0, t1 # Isolate digit
     ret
 
@@ -3833,15 +4169,16 @@ get_digit_float:
     # > a1: Which digit to extract. (digit = (a0 - a0*10**(a1+1))/10**a1)
     # < a0: The targeted digit
 
-    pow t1, 10, a1
-    add t2, a1, 1
-    pow t2, 10, t2
 
-    fctf t3, t1
-    fctf t4, t2
+    fctf t3, a1
 
-    fmod a0, t3 # Isolate previous digit
-    fdiv a0, t4 # Isolate digit
+    fpow t1, 10.0, t3
+    fadd t2, t3, 1.0
+    fpow t2, 10.0, t2
+
+    fmod a0, t2 # Isolate previous digit
+    fdiv a0, t1 # Isolate digit
+    fcti a0
     ret
 
 #-------------------------------------------------------------------------------
@@ -3884,23 +4221,68 @@ int_to_ascii:
     ret
 
 #-------------------------------------------------------------------------------
-sbmk "Load String to Buffer"
-load_string:
-    # > a0*: String address
-    # < a0: String size
+sbmk "Float to ASCII"
+float_to_ascii:
+    # > a0*: Destination address
+    # > a1: Number
+    # > a2: Decimals - How many decimal places to display
 
-    mov t0, a0
-    mov a0, zr
+    vpsh s0..s2
+
+    vmov s0..s2, a0..
+
+    cmp flt, s1, 0.0
+    sel t0, 45, 43
+    str u8t, s0, t0
+    inc s0
+    fabs s1
+
+    # Get order of magnitude
+    mov t0, 1
     @loop:
-        add t1, t0, a0
-        add t2, buffer, a0
-        lod u8t, t3, t1
-        str u8t, t2, t3
-        cmp eq, t3, 0
+        cmp gte, t0, 8
         jtr @endloop+
-        inc a0
+        pow t1, 10, t0
+        fctf t1
+        fdiv t2, s1, t1
+        cmp flt, t2, 1.0
+        jtr @endloop+
+        inc t0
         jmp @loop-
     @endloop:
+
+
+
+    pow t1, 10, s2
+    fctf t1
+    fmul s1, t1
+    add t0, s2
+    dec s2
+
+    fcti s1
+
+    # Convert to ascii
+    @loop:
+        dec t0
+        cmp lt, t0, 0
+        jtr @endloop+
+        @has_decimal_been_added:
+            cmp eq, t0, s2
+            jfs @endif+
+            str u8t, s0, 46
+            inc s0
+        @endif:
+        mov a0, s1
+        mov a1, t0
+        cal get_digit_int
+        add a0, 48
+        str u8t, s0, a0
+        inc s0
+        jmp @loop-
+    @endloop:
+
+    str u8t, s0, 0 # Add terminator
+    vpop s0..s2
     ret
 
 #-------------------------------------------------------------------------------
