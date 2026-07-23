@@ -988,6 +988,7 @@ MAIN_MENU:
         mvc t0, 255
         cmp eq, t0, 256
         mvc t0, 1
+        clp t0, 1, 255
         str u8t, system_id, t0
         ret
 
@@ -1045,6 +1046,7 @@ PAUSE_MENU:
         mvc t0, 255
         cmp eq, t0, 256
         mvc t0, 1
+        clp t0, 1, 255
         str u8t, system_id, t0
         ret
 
@@ -1207,11 +1209,11 @@ load_system:
     @end_check:
 
     # Load system ID
-    mov a0, system_id
-    fma a1, s0, SYSTEM_DATA_SIZE, STRINGS.SYS_DATA_HEADER_SIZE + 3
-    mov a2, 1
-    syscall SYS_STORAGE_READ
-    add a1, a2
+    #mov a0, system_id
+    #fma a1, s0, SYSTEM_DATA_SIZE, STRINGS.SYS_DATA_HEADER_SIZE + 3
+    #mov a2, 1
+    #syscall SYS_STORAGE_READ
+    add a1, 1
 
     # Load Player data
     mov a0, PLAYER
