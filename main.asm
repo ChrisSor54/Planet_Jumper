@@ -146,7 +146,7 @@ STRINGS:
     .Y: emb string "Y:"
     .VAL: emb string "VAL:"
     .SCALE: emb string "SCALE:"
-    .POS: emb string "POS(KM):"
+    .POS: emb string "POSITION(KM):"
     .VEL: emb string "VELOCITY(KM/S):"
     .ROT: emb string "ROTATION(RAD/S):"
     .R: emb string "RADIUS(KM):"
@@ -305,7 +305,7 @@ def SYSTEM_SIZE BODY.SIZE*MAX_BODIES
 system_bodies: res u8t SYSTEM_SIZE
 system_bodies_count: emb u8t 0
 smoke: res u8t SMOKE.SIZE*SMOKE.MAX_SMOKE_COUNT
-buffer: res u8t MAX_TERMINAL_INPUT_SIZE
+buffer: res u8t 80
 menus: res u8t MENU.SIZE*(MENU_COUNT+1)
 
 #-------------------------------------------------------------------------------
@@ -4214,7 +4214,7 @@ check_editor_input:
         @edit_rotation:
             fctf t1, a1
             sub t2, s3, a2
-            mod t2, 8
+            mod t2, 9
             fctf t3, t2
             fpow t3, 10.0, t3
             fmul t1, t3
@@ -4227,7 +4227,7 @@ check_editor_input:
         @edit_radius:
             fctf t1, a1
             sub t2, s3, a2
-            mod t2, 8
+            mod t2, 3
             fctf t3, t2
             fpow t3, 10.0, t3
             fmul t1, t3
@@ -4241,7 +4241,7 @@ check_editor_input:
         @edit_mass:
             fctf t1, a1
             sub t2, s3, a2
-            mod t2, 8
+            mod t2, 9
             fctf t3, t2
             fpow t3, 10.0, t3
             fmul t1, t3
@@ -4255,7 +4255,7 @@ check_editor_input:
         @edit_luminosity:
             mov t1, a1
             sub t2, s3, a2
-            mod t2, 8
+            mod t2, 9
             pow t3, 10, t2
             mul t1, t3
             lde u16t, t3, BODY.LUM
@@ -4461,11 +4461,12 @@ get_digit_float:
     fctf t3, a1
 
     fpow t1, 10.0, t3
-    fadd t2, t3, 1.0
-    fpow t2, 10.0, t2
+    fmul t2, t1, 10.0
 
-    fmod a0, t2 # Isolate previous digit
     fdiv a0, t1 # Isolate digit
+    fdiv t2, t1
+    fmod a0, t2 # Isolate previous digit
+
     fcti a0
     ret
 
@@ -4480,7 +4481,7 @@ int_to_ascii:
     # Get order of magnitude
     mov t0, 1
     @loop:
-        cmp gte, t0, 8
+        cmp gte, t0, 32
         jtr @endloop+
         pow t1, 10, t0
         div t2, s1, t1
@@ -4515,20 +4516,20 @@ float_to_ascii:
     # > a1: Number
     # > a2: Decimals - How many decimal places to display
 
-    vpsh s0..s2
+    vpsh s0..s3
 
     vmov s0..s2, a0..
 
     cmp flt, s1, 0.0
-    sel t0, 45, 43
-    str u8t, s0, t0
+    sel s3, 45, 43
+    str u8t, s0, s3
     inc s0
     fabs s1
 
     # Get order of magnitude
     mov t0, 1
     @loop:
-        cmp gte, t0, 8
+        cmp gte, t0, 32
         jtr @endloop+
         pow t1, 10, t0
         fctf t1
@@ -4539,7 +4540,25 @@ float_to_ascii:
         jmp @loop-
     @endloop:
 
+    # Convert to ascii
+    @loop:
+        dec t0
+        cmp lt, t0, 0
+        jtr @endloop+
 
+        mov a0, s1
+        mov a1, t0
+        cal get_digit_float
+        add a0, 48
+        str u8t, s0, a0
+        inc s0
+        jmp @loop-
+    @endloop:
+
+    str u8t, s0, 46
+    inc s0
+
+    frem s1, 1, s1
 
     pow t1, 10, s2
     fctf t1
@@ -4547,30 +4566,25 @@ float_to_ascii:
     add t0, s2
     dec s2
 
-    fcti s1
-
-    # Convert to ascii
     @loop:
         dec t0
         cmp lt, t0, 0
         jtr @endloop+
-        @has_decimal_been_added:
-            cmp eq, t0, s2
-            jfs @endif+
-            str u8t, s0, 46
-            inc s0
-        @endif:
+
         mov a0, s1
         mov a1, t0
-        cal get_digit_int
+        cal get_digit_float
         add a0, 48
         str u8t, s0, a0
         inc s0
         jmp @loop-
     @endloop:
 
+
+
+
     str u8t, s0, 0 # Add terminator
-    vpop s0..s2
+    vpop s0..s3
     ret
 
 #-------------------------------------------------------------------------------
