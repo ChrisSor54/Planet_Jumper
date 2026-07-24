@@ -771,9 +771,6 @@ game_screen_update:
     vpsh s0..s1
     lod f32t, s1, dt
 
-    cmp flt, s1, 1.0 # Skip this update if the framerate is too low to avoid physics issues
-    jfs @end_update+
-
     str u8t, smoke_can_spawn, false
 
     lod u8t, cr, game_paused
